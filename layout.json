@@ -1,0 +1,38 @@
+[
+  {
+    "_HELP": "=== BEAMLINE BUILDER CONFIGURATION GUIDE ===",
+    "USAGE": "Add components to this array. Each requires a 'type'. Optics use 'distance'. Construction (WALL/HUTCH) uses 'start' and 'end'.",
+    "COMPONENT_TYPES": [
+      "SOURCE", "SLIT", "FILTER", "XBPM", "GRATING", "VDCM", "HDCM", 
+      "VFM", "HFM", "SAMPLE", "SCREEN", "DETECTOR", "WALL", "HUTCH"
+    ],
+    "PROPERTIES": {
+      "type": "The ID of the component (e.g., 'SOURCE', 'SLIT')",
+      "distance": "Longitudinal distance in Meters. (1 Meter = 1 Grid Square)",
+      "start": "Starting distance in Meters. (1 Meter = 1 Grid Square)",
+      "end": "Ending distance in Meters. (1 Meter = 1 Grid Square)",
+      "height": "For OPTICS: Elevation in Meters. For WALL/HUTCH: Thickness/Height in Meters.",
+      "offset": "Horizontal shift in Meters. (1 Meter = 1 Grid Square)",
+      "customName": "Descriptive label for the component",
+      "sourceType": "For SOURCE: 'Undulator', 'Wiggler', 'Bending Magnet'",
+      "detectorType": "For DETECTOR: 'Silicon Detector', 'Ionization Chamber', 'Image Plate', 'Strip Detector'",
+      "animate": "For SOURCE: true/false (toggles ray animation)",
+      "passLight": "For SAMPLE/DETECTOR: true/false (blocks beam if false)"
+    },
+    "EXAMPLE_OPTIC": { "type": "SLIT", "distance": 12.5, "height": 0, "offset": 0, "customName": "Front-End Slit" },
+    "EXAMPLE_CONSTRUCTION": { "type": "HUTCH", "start": 30, "end": 45, "height": 7.0, "customName": "Experimental Hutch" }
+  },
+  { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "Undulator Source" },
+  { "type": "SLIT", "distance": 2, "height": 0, "offset": 0, "customName": "Primary Slit" },
+  { "type": "WALL", "start": 7.5, "end": 8.5, "height": 10.0, "customName": "Shielding Wall" },
+  { "type": "XBPM", "distance": 10, "height": 0, "offset": 0, "customName": "Beam Position Monitor" },
+  { "type": "HUTCH", "start": 12, "end": 28, "height": 7.0, "customName": "Optics Hutch" },
+  { "type": "VDCM", "distance": 16, "height": 0.6, "offset": 0, "customName": "Vertical DCM" },
+  { "type": "SCREEN", "distance": 20, "height": 1.2, "offset": 0, "customName": "Diagnostic Screen" },
+  { "type": "VFM", "distance": 24, "height": 1.2, "offset": 0, "customName": "Vertical Mirror" },
+  { "type": "HUTCH", "start": 30, "end": 45, "height": 7.0, "customName": "Experimental Hutch" },
+  { "type": "HDCM", "distance": 32, "height": 1.2, "offset": 0.6, "customName": "Horizontal DCM" },
+  { "type": "HFM", "distance": 38, "height": 1.2, "offset": 1.2, "customName": "Horizontal Mirror" },
+  { "type": "SAMPLE", "distance": 44, "height": 1.2, "offset": 1.2, "passLight": true, "customName": "Target Sample" },
+  { "type": "DETECTOR", "distance": 50, "height": 1.2, "offset": 1.2, "passLight": false, "detectorType": "Silicon Detector", "customName": "Final Detector" }
+]

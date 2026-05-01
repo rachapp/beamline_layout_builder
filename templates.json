@@ -1,0 +1,181 @@
+{
+  "Single Branch": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "Undulator" },
+    { "type": "SLIT", "distance": 2, "height": 0, "offset": 0, "customName": "Slit" },
+    { "type": "WALL", "start": 7.5, "end": 8.5, "height": 10, "customName": "Shielding Wall" },
+    { "type": "XBPM", "distance": 10, "height": 0, "offset": 0, "customName": "XBPM" },
+    { "type": "HUTCH", "start": 12, "end": 28, "height": 7, "customName": "Optics Hutch" },
+    { "type": "VDCM", "distance": 16, "height": 0.6, "offset": 0, "customName": "VDCM" },
+    { "type": "SCREEN", "distance": 20, "height": 1.2, "offset": 0, "customName": "Screen" },
+    { "type": "VFM", "distance": 24, "height": 1.2, "offset": 0, "customName": "VFM" },
+    { "type": "SAMPLE", "distance": 35, "height": 1.2, "offset": 0, "passLight": true, "customName": "Sample" },
+    { "type": "DETECTOR", "distance": 40, "height": 1.2, "offset": 0, "passLight": false, "customName": "Detector" }
+  ],
+  "Double Monochromator (V+H)": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "Source" },
+    { "type": "SLIT", "distance": 2, "height": 0, "offset": 0, "customName": "Slit" },
+    { "type": "VDCM", "distance": 10, "height": 0.5, "offset": 0, "customName": "Vertical DCM" },
+    { "type": "HDCM", "distance": 20, "height": 1.0, "offset": 0.5, "customName": "Horizontal DCM" },
+    { "type": "HUTCH", "start": 30, "end": 50, "height": 7, "customName": "Experimental Hutch" },
+    { "type": "SAMPLE", "distance": 40, "height": 1.0, "offset": 1.0, "passLight": true, "customName": "Sample" },
+    { "type": "DETECTOR", "distance": 48, "height": 1.0, "offset": 1.0, "passLight": false, "customName": "Detector" }
+  ],
+  "Simple Test Line": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Bending Magnet", "customName": "BM Source" },
+    { "type": "SLIT", "distance": 5, "height": 0, "offset": 0, "customName": "Slit" },
+    { "type": "FILTER", "distance": 10, "height": 0, "offset": 0, "customName": "Filter" },
+    { "type": "SCREEN", "distance": 15, "height": 0, "offset": 0, "customName": "Screen" },
+    { "type": "DETECTOR", "distance": 25, "height": 0, "offset": 0, "passLight": false, "customName": "Detector" }
+  ],
+  "GIXRD/TRXRF": [
+  {
+    "type": "SOURCE",
+    "distance": 0,
+    "height": 1,
+    "offset": 0,
+    "sourceType": "Undulator",
+    "customName": "IVU18"
+  },
+  {
+    "type": "SLIT",
+    "distance": 2.25,
+    "height": 1,
+    "offset": 0,
+    "customName": "Slit"
+  },
+  {
+    "type": "FILTER",
+    "distance": 7.65,
+    "height": 0.6,
+    "offset": 0,
+    "customName": "Filter"
+  },
+  {
+    "type": "SCREEN",
+    "distance": 3.55,
+    "height": 1,
+    "offset": 0,
+    "customName": "Screen"
+  },
+  {
+    "type": "HUTCH",
+    "start": 21,
+    "end": 33,
+    "height": 7,
+    "customName": "Optics Hutch 1"
+  },
+  {
+    "type": "VDCM",
+    "distance": 24,
+    "height": 2.35,
+    "offset": 0,
+    "customName": "DCM"
+  },
+  {
+    "type": "VFM",
+    "distance": 31,
+    "height": 1,
+    "offset": 0,
+    "customName": "VFM"
+  },
+  {
+    "type": "HUTCH",
+    "start": 39,
+    "end": 44,
+    "height": 7,
+    "customName": "Optics Hutch 2"
+  },
+  {
+    "type": "HFM",
+    "distance": 40.9,
+    "height": 1,
+    "offset": 0,
+    "customName": "VFM"
+  },
+  {
+    "type": "HUTCH",
+    "start": 44,
+    "end": 50,
+    "height": 7,
+    "customName": "Experimental Hutch"
+  },
+  {
+    "type": "DETECTOR",
+    "distance": "45.5",
+    "height": "1.5",
+    "offset": "-0.3",
+    "passLight": false,
+    "customName": "Detector"
+  },
+  {
+    "type": "WALL",
+    "start": 5.55,
+    "end": 6.75,
+    "height": 7,
+    "customName": "Wall"
+  },
+  {
+    "type": "WALL",
+    "start": 50,
+    "end": 51.2,
+    "height": 7,
+    "customName": "Wall"
+  },
+  {
+    "type": "SLIT",
+    "distance": 19.1,
+    "height": 0.8,
+    "offset": 0,
+    "customName": "Slit"
+  },
+  {
+    "type": "SCREEN",
+    "distance": 20.05,
+    "height": 0.95,
+    "offset": 0,
+    "customName": "Screen"
+  },
+  {
+    "type": "XBPM",
+    "distance": 37,
+    "height": 0.05,
+    "offset": 0,
+    "customName": "XBPM"
+  },
+  {
+    "type": "SCREEN",
+    "distance": 38.25,
+    "height": 1.55,
+    "offset": 0,
+    "customName": "Screen"
+  },
+  {
+    "type": "XBPM",
+    "distance": 4.6,
+    "height": 1,
+    "offset": 0,
+    "customName": "XBPM"
+  },
+  {
+    "type": "SLIT",
+    "distance": 43.76,
+    "height": 1.62,
+    "offset": 0,
+    "customName": "Slit"
+  },
+  {
+    "type": "SCREEN",
+    "distance": 44.31,
+    "height": 1.66,
+    "offset": 0,
+    "customName": "Screen"
+  },
+  {
+    "type": "SCREEN",
+    "distance": 28.45,
+    "height": 2.31,
+    "offset": 0,
+    "customName": "Screen"
+  }
+]
+}
