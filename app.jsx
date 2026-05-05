@@ -7,18 +7,18 @@ import templates from './templates.json';
 // --- COMPONENT DEFINITIONS ---
 const TYPES = {
   SOURCE: { id: 'SOURCE', name: 'Source', width: 80, height: 24 },
-  SLIT: { id: 'SLIT', name: 'Slit', width: 4, height: 60 },
+  SLIT: { id: 'SLIT', name: 'Slit', width: 12, height: 60 },
   FILTER: { id: 'FILTER', name: 'Filter', width: 12, height: 40 },
   GRATING: { id: 'GRATING', name: 'Grating', width: 40, height: 16 },
   WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140 },
   XBPM: { id: 'XBPM', name: 'XBPM', width: 24, height: 24 },
   HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140 },
-  VDCM: { id: 'VDCM', name: 'VDCM', width: 80, height: 60 },
-  HDCM: { id: 'HDCM', name: 'HDCM', width: 80, height: 60 },
+  VDCM: { id: 'VDCM', name: 'VDCM', width: 160, height: 60 },
+  HDCM: { id: 'HDCM', name: 'HDCM', width: 160, height: 60 },
   VFM: { id: 'VFM', name: 'VFM', width: 80, height: 12 },
   HFM: { id: 'HFM', name: 'HFM', width: 80, height: 12 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 24, height: 24 },
-  SCREEN: { id: 'SCREEN', name: 'Screen', width: 8, height: 40 },
+  SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 40 },
   DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 30, height: 40 }
 };
 
@@ -28,52 +28,57 @@ const ORIGIN_X = 160;
 const PX_PER_M = 20;
 const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899', '#64748b', '#0f172a'];
 
-const INITIAL_LAYOUT = layoutConfig
-  .filter(item => item.type)
-  .map((item, idx) => {
+const mapTemplateToItems = (templateData) => {
+  return templateData.map((item, idx) => {
     const isRange = ['WALL', 'HUTCH'].includes(item.type);
-    let x = ORIGIN_X + (item.distance || 0) * PX_PER_M;
+    let x = ORIGIN_X + (parseFloat(item.distance) || 0) * PX_PER_M;
     let dimX = item.dimX ?? TYPES[item.type].width;
     
-    const h = item.height ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
-    const o = item.offset ?? 0;
+    const h = parseFloat(item.height) ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
+    const o = parseFloat(item.offset) ?? 0;
     const y = isRange ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M);
     const z = isRange ? 150 : 150 + (o * PX_PER_M);
     const dimY = isRange ? (h * PX_PER_M) : undefined;
     const dimZ = isRange ? (h * PX_PER_M) : undefined;
 
     if (isRange && item.start !== undefined && item.end !== undefined) {
-      const startX = ORIGIN_X + item.start * PX_PER_M;
-      const endX = ORIGIN_X + item.end * PX_PER_M;
+      const startX = ORIGIN_X + parseFloat(item.start) * PX_PER_M;
+      const endX = ORIGIN_X + parseFloat(item.end) * PX_PER_M;
       x = (startX + endX) / 2;
       dimX = Math.abs(endX - startX);
     } else if (isRange) {
-      // Default fallback if start/end missing but is range type
-      const d = item.distance ?? 0;
+      const d = parseFloat(item.distance) ?? 0;
       const wMeters = (item.dimX ?? TYPES[item.type].width) / PX_PER_M;
       item.start = d - wMeters / 2;
       item.end = d + wMeters / 2;
+    } else if (['VDCM', 'HDCM'].includes(item.type)) {
+      const D_m = parseFloat(item.exitOffset) ?? 0.5;
+      const theta_deg = parseFloat(item.braggAngle) ?? 20;
+      const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
+      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
+      dimX = L + 80; // 40px padding on each side
     }
 
     return {
       ...item,
-      id: item.id || (idx + 1),
+      id: Date.now() + idx,
       x,
       dimX,
       y,
       z,
       height: h,
       offset: o,
-      distance: isRange ? ((item.start ?? 0) + (item.end ?? 0)) / 2 : (item.distance ?? 0),
-      start: item.start,
-      end: item.end
+      distance: isRange ? ((parseFloat(item.start) ?? 0) + (parseFloat(item.end) ?? 0)) / 2 : (parseFloat(item.distance) ?? 0),
+      start: parseFloat(item.start),
+      end: parseFloat(item.end)
     };
-  });
+  }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+};
 
 const GRID_SIZE = 20;
 
 export default function App() {
-  const [items, setItems] = useState(INITIAL_LAYOUT);
+  const [items, setItems] = useState(() => mapTemplateToItems(templates["Single Branch"]));
   const [selectedId, setSelectedId] = useState(null);
   const [draggingInfo, setDraggingInfo] = useState(null); 
   const [editingLabel, setEditingLabel] = useState(null); 
@@ -249,17 +254,26 @@ export default function App() {
         const isGratingActive = item.type === 'GRATING' && ((plane === 'y' && (item.orientation || 'Vertical') === 'Vertical') || (plane === 'z' && item.orientation === 'Horizontal'));
 
         if (isShifter(item.type)) {
-          const x_C1 = item.x - 20;
+          const D_m = item.exitOffset ?? 0.5;
+          const D = D_m * PX_PER_M;
+          const theta_deg = item.braggAngle ?? 20;
+          const theta = theta_deg * Math.PI / 180;
+          
+          // L = |D / tan(2*theta)| ensures C2 is always downstream
+          const tan2theta = Math.tan(2 * theta);
+          const L = Math.abs(tan2theta) > 0.001 ? Math.abs(D / tan2theta) : 40;
+
+          const x_C1 = item.x;
           const val_C1 = currVal + currSlope * (item.distance - prevDist);
           if (beamActive) tPoints.push({ x: x_C1, [plane]: val_C1, parentId: item.id, sub: 1 });
 
-          const offset = (item[plane] < val_C1) ? -24 : 24;
-          const val_C2 = val_C1 + offset;
-          const x_C2 = item.x + 20;
+          // Subtract D to make positive offset go UP (smaller Y)
+          const val_C2 = val_C1 - D;
+          const x_C2 = x_C1 + L;
           if (beamActive) tPoints.push({ x: x_C2, [plane]: val_C2, parentId: item.id, sub: 2 });
 
           currVal = val_C2;
-          prevDist = item.distance;
+          prevDist = (x_C2 - ORIGIN_X) / PX_PER_M;
           cItemsMap[item.id] = { ...item, [plane]: (val_C1 + val_C2) / 2 };
 
         } else if (isBender(item.type)) {
@@ -394,7 +408,7 @@ export default function App() {
         height: h, offset: o,
         distance: isRange ? (start + end) / 2 : (item.distance ?? 0)
       };
-    });
+    }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
     setItems(newItems);
     setSelectedId(null);
   };
@@ -408,34 +422,71 @@ export default function App() {
   };
 
   const handleOpenJsonModal = () => {
-    const cleanItems = items.map((item) => {
+    const sortedItems = [...items].sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    const cleanItems = sortedItems.map((item) => {
       const isRange = ['WALL', 'HUTCH'].includes(item.type);
-      const { id, x, y, z, dimX, dimY, dimZ, labelOffsets, ...rest } = item;
-      
+      const isDCM = ['VDCM', 'HDCM'].includes(item.type);
+      const isGrating = item.type === 'GRATING';
+      const isSource = item.type === 'SOURCE';
+      const isDetector = item.type === 'DETECTOR';
+      const isSample = item.type === 'SAMPLE';
+
       const conf = TYPES[item.type];
       let defaultName = conf?.name || item.type;
-      if (item.type === 'SOURCE') defaultName = item.sourceType || 'Undulator';
-      if (item.type === 'DETECTOR') defaultName = item.detectorType || 'Detector';
+      if (isSource) defaultName = item.sourceType || 'Undulator';
+      if (isDetector) defaultName = item.detectorType || 'Detector';
       
       const customName = item.customName || defaultName;
 
+      // Base physical properties
+      const exportItem = {
+        type: item.type,
+        customName,
+        distance: item.distance ?? 0,
+        height: item.height ?? 0,
+        offset: item.offset ?? 0
+      };
+
       if (isRange) {
-        return {
-           type: item.type,
-           start: item.start,
-           end: item.end,
-           height: item.height,
-           customName
-        };
+        exportItem.start = item.start ?? 0;
+        exportItem.end = item.end ?? 0;
+        // height for ranges is the physical size, handled in base
       }
 
-      return {
-        ...rest,
-        distance: item.distance,
-        height: item.height,
-        offset: item.offset,
-        customName
-      };
+      if (isDCM) {
+        exportItem.exitOffset = item.exitOffset ?? 0.5;
+        exportItem.braggAngle = item.braggAngle ?? 20;
+      }
+
+      if (isGrating) {
+        exportItem.orientation = item.orientation || 'Vertical';
+        exportItem.diffractAngle = item.diffractAngle ?? 15;
+        exportItem.tiltAngle = item.tiltAngle ?? 0;
+      }
+
+      if (isSource) {
+        exportItem.sourceType = item.sourceType || 'Undulator';
+        exportItem.rayColor = item.rayColor || '#ef4444';
+        exportItem.rayWidth = item.rayWidth ?? 1.5;
+        exportItem.rayStyle = item.rayStyle || 'dashed';
+        exportItem.animate = item.animate !== false;
+        exportItem.showArrow = item.showArrow !== false;
+      }
+
+      if (isDetector) {
+        exportItem.detectorType = item.detectorType || 'Silicon Detector';
+        exportItem.passLight = item.passLight === true;
+      }
+
+      if (isSample) {
+        exportItem.passLight = item.passLight !== false;
+      }
+
+      // Add any custom colors if present
+      if (item.primaryColor) exportItem.primaryColor = item.primaryColor;
+      if (item.secondaryColor) exportItem.secondaryColor = item.secondaryColor;
+
+      return exportItem;
     });
     setJsonText(JSON.stringify(cleanItems, null, 2));
     setIsJsonModalOpen(true);
@@ -450,8 +501,13 @@ export default function App() {
         const isRange = ['WALL', 'HUTCH'].includes(item.type);
         const h = item.height ?? 0;
         const o = item.offset ?? 0;
-        const y = 150 - (h * PX_PER_M);
-        const z = 150 + (o * PX_PER_M);
+        
+        // Match INITIAL_LAYOUT logic for Y/Z
+        const y = isRange ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M);
+        const z = isRange ? 150 : 150 + (o * PX_PER_M);
+        const dimY = isRange ? (h * PX_PER_M) : undefined;
+        const dimZ = isRange ? (h * PX_PER_M) : undefined;
+
         let x = ORIGIN_X + (item.distance || 0) * PX_PER_M;
         let dimX = item.dimX ?? TYPES[item.type]?.width ?? 20;
 
@@ -468,18 +524,24 @@ export default function App() {
           const wMeters = dimX / PX_PER_M;
           start = d - wMeters / 2;
           end = d + wMeters / 2;
+        } else if (['VDCM', 'HDCM'].includes(item.type)) {
+          const D_m = item.exitOffset ?? 0.5;
+          const theta_deg = item.braggAngle ?? 20;
+          const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
+          const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
+          dimX = L + 40;
         }
 
         return {
           ...item,
           id: Date.now() + idx,
-          x, y, z, dimX, start, end,
+          x, y, z, dimX, dimY, dimZ, start, end,
           height: h, offset: o,
           distance: isRange ? (start + end) / 2 : (item.distance ?? 0)
         };
       });
 
-      setItems(newItems);
+      setItems(newItems.sort((a, b) => (a.distance || 0) - (b.distance || 0)));
       setIsJsonModalOpen(false);
     } catch (err) {
       alert("Invalid JSON format: " + err.message);
@@ -520,39 +582,71 @@ export default function App() {
   };
 
   const handleBgPointerDown = (e, view) => {
-    if (e.button !== 0) return; 
+    // Primary button only for mice, any for touch
+    if (e.pointerType === 'mouse' && e.button !== 0) return; 
 
-    if (placingType && ghostPos) {
-      const newDistance = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(2));
+    if (placingType) {
+      const wrapperRef = (view === 'TOP' ? topViewRef : sideViewRef);
+      if (!wrapperRef.current) return;
+      
+      const rect = wrapperRef.current.getBoundingClientRect();
+      let rawX = (e.clientX - rect.left) / zoom;
+      let rawSecondary = (e.clientY - rect.top) / zoom;
+
+      if (snapToGrid) {
+        rawX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
+        rawSecondary = Math.round(rawSecondary / GRID_SIZE) * GRID_SIZE;
+      }
+
+      const newDistance = parseFloat(((rawX - ORIGIN_X) / PX_PER_M).toFixed(2));
       const finalX = ORIGIN_X + newDistance * PX_PER_M; 
       
-      const isRange = ['WALL', 'HUTCH'].includes(placingType);
       const conf = TYPES[placingType];
+      if (!conf) {
+        setPlacingType(null);
+        return;
+      }
+
+      const isRange = ['WALL', 'HUTCH'].includes(placingType);
       const h = conf.height / PX_PER_M;
+
+      const isDCM = placingType === 'VDCM' || placingType === 'HDCM';
+      const dOffset = isDCM ? 0.5 : 0;
+      const bAngle = isDCM ? 20 : 0;
+      let finalDimX = conf.width;
+
+      if (isDCM) {
+        const tan2theta = Math.tan(2 * bAngle * Math.PI / 180);
+        const L = Math.abs(tan2theta) > 0.001 ? Math.abs((dOffset * PX_PER_M) / tan2theta) : 40;
+        finalDimX = L + 40;
+      }
       
       const newItem = { 
         id: Date.now(), 
         type: placingType, 
         x: finalX, 
-        y: view === 'SIDE' ? ghostPos.y : 150, 
-        z: view === 'TOP' ? ghostPos.y : 150,
+        y: view === 'SIDE' ? rawSecondary : 150, 
+        z: view === 'TOP' ? rawSecondary : 150,
         distance: newDistance,
-        height: view === 'SIDE' ? parseFloat(((150 - ghostPos.y) / PX_PER_M).toFixed(2)) : 0,
-        offset: view === 'TOP' ? parseFloat(((ghostPos.y - 150) / PX_PER_M).toFixed(2)) : 0,
+        height: view === 'SIDE' ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0,
+        offset: view === 'TOP' ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0,
         customName: conf.name,
+        dimX: finalDimX,
         ...(placingType === 'SOURCE' ? { sourceType: 'Undulator' } : {}),
+        ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle } : {}),
         ...(isRange ? { 
            start: parseFloat((newDistance - (conf.width / 2 / PX_PER_M)).toFixed(2)), 
            end: parseFloat((newDistance + (conf.width / 2 / PX_PER_M)).toFixed(2)),
            height: h,
-           dimX: conf.width, dimY: conf.height, dimZ: conf.height,
+           dimY: conf.height, dimZ: conf.height,
            y: 200 - conf.height / 2
         } : {}),
-        ...(placingType === 'GRATING' ? { orientation: 'Vertical', tiltAngle: 45, diffractAngle: 15 } : {}),
+        ...(placingType === 'GRATING' ? { orientation: 'Vertical', tiltAngle: 0, diffractAngle: 15 } : {}),
         ...(placingType === 'SAMPLE' ? { passLight: true } : {}),
         ...(placingType === 'DETECTOR' ? { passLight: false, detectorType: 'Silicon Detector' } : {})
       };
-      setItems([...items, newItem]);
+
+      setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
       setSelectedId(newItem.id);
       
       setLastClickedView(view);
@@ -841,6 +935,16 @@ export default function App() {
             updated.x = (startX + endX) / 2;
             updated.dimX = Math.abs(endX - startX);
             updated.distance = (s + e) / 2;
+          } else if (['VDCM', 'HDCM'].includes(i.type)) {
+            // Dynamic Housing Adjustment
+            const d = propName === 'exitOffset' ? Number(val) : (i.exitOffset ?? 0.5);
+            const a = propName === 'braggAngle' ? Number(val) : (i.braggAngle ?? 20);
+            const tan2theta = Math.tan(2 * a * Math.PI / 180);
+            const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+            updated.dimX = L + 40; // 20px padding on each side
+            if (propName === 'distance' && !isNaN(val) && val !== '') {
+               updated.x = ORIGIN_X + Number(val) * PX_PER_M;
+            }
           } else if (propName === 'distance' && !isNaN(val) && val !== '') {
             // Handle Point logic
             updated.x = ORIGIN_X + Number(val) * PX_PER_M;
@@ -855,7 +959,7 @@ export default function App() {
           return updated;
         }
         return i;
-      }));
+      }).sort((a, b) => (a.distance || 0) - (b.distance || 0)));
     }
   };
 
@@ -1008,42 +1112,69 @@ export default function App() {
         );
       }
 
-      let rot1 = 0, rot2 = 0;
-      let top1 = 42, top2 = 18; 
+      let c1Config = { left: 40, top: 30, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
+      let c2Config = { left: 80, top: 30, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
 
       if (tracePoints) {
         const idx1 = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 1);
         const idx2 = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 2);
         
-        if (idx1 > 0 && idx2 !== -1 && idx2 < tracePoints.length - 1) {
-           const prev = tracePoints[idx1 - 1];
+        if (idx1 !== -1 && idx2 !== -1) {
            const p1 = tracePoints[idx1];
            const p2 = tracePoints[idx2];
+           const offset = item.exitOffset ?? 0.5;
+           const theta_deg = item.braggAngle ?? 20;
+           const theta_rad = theta_deg * Math.PI / 180;
 
-           top1 = 30 + (p1[planeCoord] - item[planeCoord]);
-           top2 = 30 + (p2[planeCoord] - item[planeCoord]);
+           // Local coordinates relative to anchor at local 40px
+           const localAnchorX = 40; 
+           c1Config.left = localAnchorX + (p1.x - item.x);
+           c1Config.top = 30 + (p1[planeCoord] - item[planeCoord]);
+           c2Config.left = localAnchorX + (p2.x - item.x);
+           c2Config.top = 30 + (p2[planeCoord] - item[planeCoord]);
 
-           const angleIn1 = Math.atan2(p1[planeCoord] - prev[planeCoord], p1.x - prev.x);
-           const angleOut1 = Math.atan2(p2[planeCoord] - p1[planeCoord], p2.x - p1.x);
-           rot1 = (angleIn1 + angleOut1) / 2;
-           if (angleIn1 < angleOut1) rot1 += Math.PI;
-
-           rot2 = rot1 + Math.PI;
+           // Convention: Positive Offset shifts beam UP (smaller Y).
+           // To shift UP, C1 must be LOWER (reflects from top) and C2 must be UPPER.
+           const c1IsLower = offset > 0;
+           
+           if (c1IsLower) {
+             // C1: Lower crystal, top surface reflects. Tilt counter-clockwise.
+             c1Config.rot = -theta_rad;
+             c1Config.origin = '50% 0%';
+             c1Config.translate = 'translate(-50%, 0%)';
+             c1Config.justify = 'justify-end';
+             // C2: Upper crystal, bottom surface reflects.
+             c2Config.rot = -theta_rad;
+             c2Config.origin = '50% 100%';
+             c2Config.translate = 'translate(-50%, -100%)';
+             c2Config.justify = 'justify-start';
+           } else {
+             // C1: Upper crystal, bottom surface reflects. Tilt clockwise.
+             c1Config.rot = theta_rad;
+             c1Config.origin = '50% 100%';
+             c1Config.translate = 'translate(-50%, -100%)';
+             c1Config.justify = 'justify-start';
+             // C2: Lower crystal, top surface reflects.
+             c2Config.rot = theta_rad;
+             c2Config.origin = '50% 0%';
+             c2Config.translate = 'translate(-50%, 0%)';
+             c2Config.justify = 'justify-end';
+           }
         }
       }
 
       const crystalStyle = { border: `1.5px solid ${primary}`, backgroundColor: secondary };
-      const hatcingStyle = { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 4px)`};
+      const hatchStyle = { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 4px)`};
 
       return (
         <div className="w-full h-full relative rounded-none" style={{ border: `1px dashed ${theme.inactiveBorder}` }}>
-          <div className="absolute flex flex-col justify-end shadow-sm rounded-none"
-               style={{ width: '28px', height: '10px', left: '20px', top: `${top1}px`, transformOrigin: '50% 0%', transform: `translate(-50%, 0%) rotate(${rot1}rad)`, ...crystalStyle}}>
-            <div className="w-full h-1/2 opacity-50" style={hatcingStyle} />
+          <div className={`absolute flex flex-col shadow-sm rounded-none ${c1Config.justify}`}
+               style={{ width: '28px', height: '10px', left: `${c1Config.left}px`, top: `${c1Config.top}px`, transformOrigin: c1Config.origin, transform: `${c1Config.translate} rotate(${c1Config.rot}rad)`, ...crystalStyle}}>
+            <div className="w-full h-1/2 opacity-50" style={hatchStyle} />
           </div>
-          <div className="absolute flex flex-col justify-end shadow-sm rounded-none"
-               style={{ width: '28px', height: '10px', left: '60px', top: `${top2}px`, transformOrigin: '50% 0%', transform: `translate(-50%, 0%) rotate(${rot2}rad)`, ...crystalStyle}}>
-            <div className="w-full h-1/2 opacity-50" style={hatcingStyle} />
+          <div className={`absolute flex flex-col shadow-sm rounded-none ${c2Config.justify}`}
+               style={{ width: '28px', height: '10px', left: `${c2Config.left}px`, top: `${c2Config.top}px`, transformOrigin: c2Config.origin, transform: `${c2Config.translate} rotate(${c2Config.rot}rad)`, ...crystalStyle}}>
+            <div className="w-full h-1/2 opacity-50" style={hatchStyle} />
           </div>
         </div>
       );
@@ -1212,6 +1343,31 @@ export default function App() {
             </div>
           )}
 
+          {(selectedItem.type === 'VDCM' || selectedItem.type === 'HDCM') && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1">Exit Offset (m)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={selectedItem.exitOffset ?? 1.2}
+                  onChange={(e) => updateItemProp('exitOffset', parseFloat(e.target.value))}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1">Bragg Angle (°)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={selectedItem.braggAngle ?? 15}
+                  onChange={(e) => updateItemProp('braggAngle', parseFloat(e.target.value))}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                />
+              </div>
+            </div>
+          )}
+
           {selectedItem.type === 'GRATING' && (
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2">
@@ -1226,15 +1382,6 @@ export default function App() {
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase mb-1">Visual Tilt (°)</label>
-                <input
-                  type="number"
-                  value={selectedItem.tiltAngle ?? 45}
-                  onChange={(e) => updateItemProp('tiltAngle', e.target.value)}
-                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-                />
-              </div>
-              <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Deflect Beam (°)</label>
                 <input
                   type="number"
@@ -1243,6 +1390,18 @@ export default function App() {
                   className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                 />
               </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1">Fine Tilt Offset (°)</label>
+                <input
+                  type="number"
+                  value={selectedItem.tiltAngle ?? 0}
+                  onChange={(e) => updateItemProp('tiltAngle', e.target.value)}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                />
+              </div>
+              <p className="col-span-2 text-[9px] opacity-60 italic leading-tight">
+                * The grating automatically aligns to bisect the deflection path. Use offset for fine-tuning blaze angles.
+              </p>
             </div>
           )}
 
@@ -1534,11 +1693,7 @@ export default function App() {
                 const itemH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
 
                 let rotation = 0;
-                if (item.type === 'GRATING') {
-                    if (isGratingActive) {
-                        rotation = -(parseFloat(item.tiltAngle) ?? 45) * Math.PI / 180;
-                    }
-                } else if (isSimpleMirrorActive) {
+                if (item.type === 'GRATING' || isSimpleMirrorActive) {
                     const pIdx = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 0);
                     if (pIdx > 0 && pIdx < tracePoints.length - 1) {
                         const p = tracePoints[pIdx];
@@ -1546,14 +1701,29 @@ export default function App() {
                         const next = tracePoints[pIdx + 1];
                         const angleIn = Math.atan2(p[planeCoord] - prev[planeCoord], p.x - prev.x);
                         const angleOut = Math.atan2(next[planeCoord] - p[planeCoord], next.x - p.x);
+                        
+                        // Bisector logic: The component surface should bisect the deflection angle
                         rotation = (angleIn + angleOut) / 2;
+                        
+                        // If beam deflects "down" (angleOut > angleIn), we typically flip the component 
+                        // so the reflecting top surface faces the beam from above.
                         if (angleIn < angleOut) rotation += Math.PI;
+
+                        // For Gratings, tiltAngle is now an offset from the ideal mirror angle
+                        if (item.type === 'GRATING') {
+                            rotation -= (parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
+                        }
+                    } else if (item.type === 'GRATING' && isGratingActive) {
+                        // Fallback/Placement rotation
+                        rotation = -(parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
                     }
                 }
 
                 // Simple mirrors and gratings pivot on front edge for reflective physics
-                let transformOrigin = isSimpleMirrorActive ? '50% 0%' : '50% 50%';
-                let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : 'translate(-50%, -50%)';
+                // DCMs pivot on the left edge (Crystal 1 position, fixed at local 40px)
+                const isDCM = item.type === 'VDCM' || item.type === 'HDCM';
+                let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? '40px 50%' : '50% 50%');
+                let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? 'translate(-40px, -50%)' : 'translate(-50%, -50%)');
                 if (item.type === 'SOURCE') {
                     transformOrigin = '100% 50%';
                     transformOffset = 'translate(-100%, -50%)';
