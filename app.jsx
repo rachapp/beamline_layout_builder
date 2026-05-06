@@ -462,7 +462,10 @@ export default function App() {
 
       return exportItem;
     });
-    setJsonText(JSON.stringify(cleanItems, null, 2));
+    
+    // Format JSON with each object on its own line for brevity
+    const formattedJson = "[\n  " + cleanItems.map(item => JSON.stringify(item)).join(",\n  ") + "\n]";
+    setJsonText(formattedJson);
     setIsJsonModalOpen(true);
   };
 
