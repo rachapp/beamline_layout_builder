@@ -7,7 +7,7 @@ import templates from './templates.json';
 // --- COMPONENT DEFINITIONS ---
 const TYPES = {
   SOURCE: { id: 'SOURCE', name: 'Source', width: 80, height: 24 },
-  SLIT: { id: 'SLIT', name: 'Slit', width: 12, height: 60 },
+  SLIT: { id: 'SLIT', name: 'Slit', width: 6, height: 40 },
   FILTER: { id: 'FILTER', name: 'Filter', width: 12, height: 40 },
   GRATING: { id: 'GRATING', name: 'Grating', width: 40, height: 16 },
   WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140 },
@@ -18,7 +18,7 @@ const TYPES = {
   VFM: { id: 'VFM', name: 'VFM', width: 80, height: 12 },
   HFM: { id: 'HFM', name: 'HFM', width: 80, height: 12 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 24, height: 24 },
-  SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 40 },
+  SCREEN: { id: 'SCREEN', name: 'Screen', width: 6, height: 40 },
   DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 30, height: 40 }
 };
 
@@ -995,10 +995,10 @@ export default function App() {
       const isTopView = viewType === 'TOP';
       return (
         <div className="relative w-full h-full">
-          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '8px', height: '42%', top: 0, left: isTopView ? 0 : 'auto', right: isTopView ? 'auto' : 0 }} />
-          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '8px', height: '42%', bottom: 0, left: isTopView ? 0 : 'auto', right: isTopView ? 'auto' : 0 }} />
-          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '8px', height: '28%', top: '20%', left: isTopView ? 'auto' : 0, right: isTopView ? 0 : 'auto' }} />
-          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '8px', height: '28%', bottom: '20%', left: isTopView ? 'auto' : 0, right: isTopView ? 0 : 'auto' }} />
+          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '4px', height: '42%', top: 0, left: isTopView ? 0 : 'auto', right: isTopView ? 'auto' : 0 }} />
+          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '4px', height: '42%', bottom: 0, left: isTopView ? 0 : 'auto', right: isTopView ? 'auto' : 0 }} />
+          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '4px', height: '28%', top: '20%', left: isTopView ? 'auto' : 0, right: isTopView ? 0 : 'auto' }} />
+          <div className="absolute rounded-none shadow-sm" style={{ backgroundColor: primary, width: '4px', height: '28%', bottom: '20%', left: isTopView ? 'auto' : 0, right: isTopView ? 0 : 'auto' }} />
         </div>
       );
     }
@@ -1761,7 +1761,7 @@ export default function App() {
 
                     {/* The Independent Draggable/Editable Label */}
                     <div 
-                      className={`absolute whitespace-nowrap text-[10px] font-bold px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
+                      className={`absolute whitespace-nowrap text-[9px] px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
                       style={{ 
                         transform: 'translateX(-50%)',
                         left: labelOffsetX,
@@ -1792,7 +1792,7 @@ export default function App() {
                             }
                             if (e.key === 'Escape') setEditingLabel(null);
                           }}
-                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 text-[10px] font-bold select-text"
+                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 text-[9px] select-text"
                           style={{ 
                             color: isDarkMode ? '#60a5fa' : '#2563eb',
                             textShadow: 'none',
