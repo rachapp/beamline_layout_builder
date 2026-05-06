@@ -7,32 +7,32 @@
       "VFM", "HFM", "SAMPLE", "SCREEN", "DETECTOR", "WALL", "HUTCH"
     ],
     "CURRENT_DEFAULTS": {
-      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0, "padding": "40px each side" },
+      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0, "crystal1Length": 1.0, "crystal2Length": 1.0 },
       "GRATING": { "tiltAngle": 0, "diffractAngle": 15 },
-      "THIN_OPTICS": { "width": 12 }
+      "THIN_OPTICS": { "width": 12 },
+      "PHYSICAL_LENGTHS": {
+        "SOURCE": 4.0,
+        "GRATING": 2.0,
+        "XBPM": 1.2,
+        "VDCM_CRYSTALS": 1.0,
+        "HDCM_CRYSTALS": 1.0,
+        "VFM": 4.0,
+        "HFM": 4.0,
+        "SAMPLE": 1.2,
+        "DETECTOR": 1.5
+      }
     }
   },
   {
     "TEMPLATE_EXAMPLES": [
       {
         "NAME": "Single Branch",
-        "USE_CASE": "Standard hard X-ray beamline with dual DCMs and focusing mirrors."
-      },
-      {
-        "NAME": "Diagnostic Line",
-        "USE_CASE": "High-stability monitoring with slit-screen assemblies before every optic."
-      },
-      {
-        "NAME": "Soft X-ray PES",
-        "USE_CASE": "Showcases vertical gratings with high deflection angles (25°) for spectroscopy."
-      },
-      {
-        "NAME": "Micro-focus Station",
-        "USE_CASE": "Advanced ray tracing using an up-shifting DCM and dual K-B focusing mirrors."
-      },
-      {
-        "NAME": "Long Station (Diffraction)",
-        "USE_CASE": "Long-distance high-energy diffraction setup using a Bending Magnet source."
+        "USE_CASE": "Standard hard X-ray beamline with dual DCMs and focusing mirrors.",
+        "COMPONENTS_EXAMPLE": [
+          { "type": "SOURCE", "customName": "Undulator", "distance": 0, "length": 4.0 },
+          { "type": "VDCM", "customName": "Monochromator", "distance": 15, "crystal1Length": 1.0, "crystal2Length": 1.0 },
+          { "type": "VFM", "customName": "Vertical Mirror", "distance": 25, "length": 4.0 }
+        ]
       }
     ]
   }
