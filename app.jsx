@@ -31,32 +31,38 @@ const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#
 const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
     const isRange = ['WALL', 'HUTCH'].includes(item.type);
-    let x = ORIGIN_X + (parseFloat(item.distance) || 0) * PX_PER_M;
+    const dist = parseFloat(item.distance) || 0;
+    
+    let x = ORIGIN_X + dist * PX_PER_M;
     let dimX = item.dimX ?? TYPES[item.type].width;
     
     const h = parseFloat(item.height) ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
     const o = parseFloat(item.offset) ?? 0;
+    
     const y = isRange ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M);
     const z = isRange ? 150 : 150 + (o * PX_PER_M);
+    
     const dimY = isRange ? (h * PX_PER_M) : undefined;
     const dimZ = isRange ? (h * PX_PER_M) : undefined;
 
-    if (isRange && item.start !== undefined && item.end !== undefined) {
-      const startX = ORIGIN_X + parseFloat(item.start) * PX_PER_M;
-      const endX = ORIGIN_X + parseFloat(item.end) * PX_PER_M;
+    let start = parseFloat(item.start);
+    let end = parseFloat(item.end);
+
+    if (isRange && !isNaN(start) && !isNaN(end)) {
+      const startX = ORIGIN_X + start * PX_PER_M;
+      const endX = ORIGIN_X + end * PX_PER_M;
       x = (startX + endX) / 2;
       dimX = Math.abs(endX - startX);
     } else if (isRange) {
-      const d = parseFloat(item.distance) ?? 0;
       const wMeters = (item.dimX ?? TYPES[item.type].width) / PX_PER_M;
-      item.start = d - wMeters / 2;
-      item.end = d + wMeters / 2;
+      start = dist - wMeters / 2;
+      end = dist + wMeters / 2;
     } else if (['VDCM', 'HDCM'].includes(item.type)) {
       const D_m = parseFloat(item.exitOffset) ?? 0.5;
       const theta_deg = parseFloat(item.braggAngle) ?? 20;
       const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
       const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
-      dimX = L + 80; // 40px padding on each side
+      dimX = L + 80;
     }
 
     return {
@@ -68,9 +74,10 @@ const mapTemplateToItems = (templateData) => {
       z,
       height: h,
       offset: o,
-      distance: isRange ? ((parseFloat(item.start) ?? 0) + (parseFloat(item.end) ?? 0)) / 2 : (parseFloat(item.distance) ?? 0),
-      start: parseFloat(item.start),
-      end: parseFloat(item.end)
+      distance: isRange ? ((start || 0) + (end || 0)) / 2 : dist,
+      dimY,
+      dimZ,
+      ...(isRange ? { start, end } : {})
     };
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
 };
@@ -376,40 +383,7 @@ export default function App() {
   const loadTemplate = (templateName) => {
     const selectedTemplate = templates[templateName];
     if (!selectedTemplate) return;
-
-    const newItems = selectedTemplate.map((item, idx) => {
-      const isRange = ['WALL', 'HUTCH'].includes(item.type);
-      const h = item.height ?? 0;
-      const o = item.offset ?? 0;
-      const y = 150 - (h * PX_PER_M);
-      const z = 150 + (o * PX_PER_M);
-      let x = ORIGIN_X + (item.distance || 0) * PX_PER_M;
-      let dimX = item.dimX ?? TYPES[item.type].width;
-
-      let start = item.start;
-      let end = item.end;
-
-      if (isRange && start !== undefined && end !== undefined) {
-        const startX = ORIGIN_X + start * PX_PER_M;
-        const endX = ORIGIN_X + end * PX_PER_M;
-        x = (startX + endX) / 2;
-        dimX = Math.abs(endX - startX);
-      } else if (isRange) {
-        const d = item.distance ?? 0;
-        const wMeters = dimX / PX_PER_M;
-        start = d - wMeters / 2;
-        end = d + wMeters / 2;
-      }
-
-      return {
-        ...item,
-        id: Date.now() + idx,
-        x, y, z, dimX, start, end,
-        height: h, offset: o,
-        distance: isRange ? (start + end) / 2 : (item.distance ?? 0)
-      };
-    }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
-    setItems(newItems);
+    setItems(mapTemplateToItems(selectedTemplate));
     setSelectedId(null);
   };
 
@@ -941,7 +915,7 @@ export default function App() {
             const a = propName === 'braggAngle' ? Number(val) : (i.braggAngle ?? 20);
             const tan2theta = Math.tan(2 * a * Math.PI / 180);
             const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
-            updated.dimX = L + 40; // 20px padding on each side
+            updated.dimX = L + 80; // 40px padding on each side
             if (propName === 'distance' && !isNaN(val) && val !== '') {
                updated.x = ORIGIN_X + Number(val) * PX_PER_M;
             }
