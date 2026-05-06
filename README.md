@@ -1,78 +1,46 @@
-# Beamline Builder 🚀
+# Beamline Layout Builder
 
-An interactive, web-based tool for designing and visualizing synchrotron beamline layouts. Built with **React**, **Vite**, and **Tailwind CSS**.
+An interactive, physics-aware web application for designing and visualizing synchrotron beamline layouts.
 
-![Beamline Builder Preview](https://img.shields.io/badge/Status-Active-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-blue)
+## 🚀 Live Demo
+
+You can run the application online at:  
+[**https://rachapp.github.io/beamline_layout_builder/**](https://rachapp.github.io/beamline_layout_builder/)
+
+---
 
 ## ✨ Features
 
--   **Dual-View Visualization:** Design simultaneously in **Side View** (vertical elevation) and **Top View** (horizontal offset).
--   **Physical Metric System:** 1 Unit = 1 Meter = 1 Grid Square. Design with real-world dimensions.
--   **Smart Ray Tracing:** Automatic ray path calculation through slits, monochromators (VDCM/HDCM), mirrors (VFM/HFM), and gratings.
--   **JSON Data Portal:** Export your entire layout to JSON or import existing configurations via a simple text interface.
--   **Customizable Construction:** Add shielding walls and experimental hutches with easy "Start" and "End" distance controls.
--   **Template Library:** Choose from predefined layouts like "Single Branch" or "Double Monochromator."
--   **Dark Mode Support:** Switch between Light and Dark themes for comfortable designing.
+- **Physics-Aware Optics:** Support for Sources, Slits, Filters, DCMs, Mirrors, Gratings, and more.
+- **Dynamic DCM Modeling:** Fixed exit offset logic with automatic crystal gap and housing adjustment.
+- **Grating Alignment:** Automatic visual rotation based on beam deflection path.
+- **Template System:** Load predefined beamline configurations like "Single Branch" or "GIXRD/TRXRF".
+- **JSON Data Portal:** Export and import your layouts for sharing or versioning.
+- **Interactive UI:** Panning, zooming, snapping, and live property editing.
 
-## 🛠️ Getting Started
+## 🛠️ Local Development
 
-### Local Development
+If you'd like to run the project locally on your machine:
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-    cd YOUR_REPO_NAME
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/rachapp/beamline_layout_builder.git
+   cd beamline_layout_builder
+   ```
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-    Open `http://localhost:5173` in your browser.
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
 
-## 📂 Configuration Guide
+## 👤 Author
 
-You can define your beamline directly in `layout.json`. 
+Developed by **rachapp** (Pornthep Pongchalee).
 
-### For Optics (Slits, Mirrors, etc.)
-```json
-{ 
-  "type": "SLIT", 
-  "distance": 12.5, 
-  "height": 0, 
-  "offset": 0, 
-  "customName": "Front-End Slit" 
-}
-```
-
-### For Construction (Walls, Hutches)
-```json
-{ 
-  "type": "HUTCH", 
-  "start": 30, 
-  "end": 45, 
-  "height": 7.0, 
-  "customName": "Experimental Hutch" 
-}
-```
-
-## 🚀 Deployment
-
-This project is configured for **GitHub Pages**. To deploy your own version:
-
-1.  Push your code to the `main` branch.
-2.  Run the deploy command:
-    ```bash
-    npm run deploy
-    ```
-3.  Your app will be live at `https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/`.
-
-## 📄 License
-
-This project is licensed under the MIT License.
+---
+© 2026 Beamline Builder Project.
