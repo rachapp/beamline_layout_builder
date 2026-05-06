@@ -7,30 +7,33 @@
       "VFM", "HFM", "SAMPLE", "SCREEN", "DETECTOR", "WALL", "HUTCH"
     ],
     "CURRENT_DEFAULTS": {
-      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0 },
+      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0, "padding": "40px each side" },
       "GRATING": { "tiltAngle": 0, "diffractAngle": 15 },
       "THIN_OPTICS": { "width": 12 }
     }
   },
   {
-    "TEMPLATE_NAME": "Diagnostic Line",
-    "DESCRIPTION": "Features slit-screen assemblies before every major optic and an upstream XBPM for closed-loop feedback.",
-    "COMPONENTS": [
-      { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "Undulator Source" },
-      { "type": "XBPM", "distance": 2, "height": 0, "offset": 0, "customName": "Feedback BPM ( Lever Arm )" },
-      { "type": "SLIT", "distance": 5, "height": 0, "offset": 0, "customName": "Diag Slit 1" },
-      { "type": "SCREEN", "distance": 5.5, "height": 0, "offset": 0, "customName": "Diag Screen 1" },
-      { "type": "FILTER", "distance": 8, "height": 0, "offset": 0, "customName": "Main Filter" },
-      { "type": "SLIT", "distance": 12, "height": 0, "offset": 0, "customName": "Diag Slit 2" },
-      { "type": "SCREEN", "distance": 12.5, "height": 0, "offset": 0, "customName": "Diag Screen 2" },
-      { "type": "VDCM", "distance": 15, "height": 0, "offset": 0, "exitOffset": 0.5, "braggAngle": 20, "customName": "Main DCM" },
-      { "type": "SLIT", "distance": 20, "height": 0.5, "offset": 0, "customName": "Diag Slit 3" },
-      { "type": "SCREEN", "distance": 20.5, "height": 0.5, "offset": 0, "customName": "Diag Screen 3" },
-      { "type": "VFM", "distance": 24, "height": 0.5, "offset": 0, "customName": "Focusing Mirror" },
-      { "type": "SLIT", "distance": 28, "height": 0.5, "offset": 0, "customName": "Diag Slit 4" },
-      { "type": "SCREEN", "distance": 28.5, "height": 0.5, "offset": 0, "customName": "Diag Screen 4" },
-      { "type": "SAMPLE", "distance": 32, "height": 0.5, "offset": 0, "passLight": true, "customName": "Sample Stage" },
-      { "type": "DETECTOR", "distance": 38, "height": 0.5, "offset": 0, "passLight": false, "detectorType": "Silicon Detector", "customName": "Detector" }
+    "TEMPLATE_EXAMPLES": [
+      {
+        "NAME": "Single Branch",
+        "USE_CASE": "Standard hard X-ray beamline with dual DCMs and focusing mirrors."
+      },
+      {
+        "NAME": "Diagnostic Line",
+        "USE_CASE": "High-stability monitoring with slit-screen assemblies before every optic."
+      },
+      {
+        "NAME": "Soft X-ray PES",
+        "USE_CASE": "Showcases vertical gratings with high deflection angles (25°) for spectroscopy."
+      },
+      {
+        "NAME": "Micro-focus Station",
+        "USE_CASE": "Advanced ray tracing using an up-shifting DCM and dual K-B focusing mirrors."
+      },
+      {
+        "NAME": "Long Station (Diffraction)",
+        "USE_CASE": "Long-distance high-energy diffraction setup using a Bending Magnet source."
+      }
     ]
   }
 ]

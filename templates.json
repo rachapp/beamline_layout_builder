@@ -29,5 +29,34 @@
     { "type": "DETECTOR", "distance": 38, "height": 0.5, "offset": 0, "passLight": false, "detectorType": "Silicon Detector", "customName": "Detector" },
     { "type": "WALL", "start": 9.5, "end": 10.5, "height": 10.0, "customName": "FOE Wall" },
     { "type": "HUTCH", "start": 14, "end": 26, "height": 7.0, "customName": "Optics Hutch" }
+  ],
+  "Soft X-ray PES": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "SX Source" },
+    { "type": "SLIT", "distance": 4, "height": 0, "offset": 0, "customName": "Entrance Slit" },
+    { "type": "GRATING", "distance": 10, "height": 0, "offset": 0, "orientation": "Vertical", "diffractAngle": 25, "tiltAngle": 0, "customName": "Varied Line Grating" },
+    { "type": "SLIT", "distance": 18, "height": -4.66, "offset": 0, "customName": "Exit Slit" },
+    { "type": "VFM", "distance": 24, "height": -4.66, "offset": 0, "customName": "Focusing Mirror" },
+    { "type": "SAMPLE", "distance": 30, "height": -3, "offset": 0, "passLight": false, "customName": "PES Chamber" },
+    { "type": "HUTCH", "start": 28, "end": 35, "height": 6, "customName": "Experimental Station" }
+  ],
+  "Micro-focus Station": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Undulator", "animate": true, "customName": "U20 Source" },
+    { "type": "VDCM", "distance": 12, "height": 0, "offset": 0, "exitOffset": -0.5, "braggAngle": 15, "customName": "DCM (Up-Shift)" },
+    { "type": "XBPM", "distance": 18, "height": -0.5, "offset": 0, "customName": "Monitoring BPM" },
+    { "type": "VFM", "distance": 24, "height": -0.5, "offset": 0, "customName": "V-Focus Mirror" },
+    { "type": "HFM", "distance": 25, "height": -0.5, "offset": 0, "customName": "H-Focus Mirror" },
+    { "type": "SAMPLE", "distance": 28, "height": -0.5, "offset": 0.5, "passLight": true, "customName": "Micro-Sample" },
+    { "type": "DETECTOR", "distance": 35, "height": -0.5, "offset": 0.5, "detectorType": "Image Plate", "customName": "WAXS Detector" },
+    { "type": "WALL", "start": 10, "end": 11, "height": 10, "customName": "Shielding Wall" }
+  ],
+  "Long Station (Diffraction)": [
+    { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "sourceType": "Bending Magnet", "customName": "BM Source" },
+    { "type": "FILTER", "distance": 5, "height": 0, "offset": 0, "customName": "Heat Filter" },
+    { "type": "VDCM", "distance": 20, "height": 0, "offset": 0, "exitOffset": 0.5, "braggAngle": 5, "customName": "High-E DCM" },
+    { "type": "VFM", "distance": 40, "height": 0.5, "offset": 0, "customName": "Long Focusing Mirror" },
+    { "type": "XBPM", "distance": 60, "height": 0.5, "offset": 0, "customName": "Far BPM" },
+    { "type": "SAMPLE", "distance": 80, "height": 0.5, "offset": 0, "customName": "Large Hutch Sample" },
+    { "type": "DETECTOR", "distance": 120, "height": 0.5, "offset": 0, "detectorType": "Silicon Detector", "customName": "Far-Field Detector" },
+    { "type": "HUTCH", "start": 75, "end": 130, "height": 8, "customName": "Experimental Hall" }
   ]
 }
