@@ -529,7 +529,7 @@ export default function App() {
           const theta_deg = item.braggAngle ?? 20;
           const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
           const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
-          dimX = L + 40;
+          dimX = L + 80;
         }
 
         return {
@@ -618,7 +618,7 @@ export default function App() {
       if (isDCM) {
         const tan2theta = Math.tan(2 * bAngle * Math.PI / 180);
         const L = Math.abs(tan2theta) > 0.001 ? Math.abs((dOffset * PX_PER_M) / tan2theta) : 40;
-        finalDimX = L + 40;
+        finalDimX = L + 80;
       }
       
       const newItem = { 
