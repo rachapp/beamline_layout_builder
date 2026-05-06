@@ -4,35 +4,37 @@
     "USAGE": "This file provides examples and documentation. The app's default loading and templates are managed in templates.json.",
     "COMPONENT_TYPES": [
       "SOURCE", "SLIT", "FILTER", "XBPM", "GRATING", "VDCM", "HDCM", 
-      "VFM", "HFM", "SAMPLE", "SCREEN", "DETECTOR", "WALL", "HUTCH"
+      "VFM", "HFM", "SAMPLE", "SCREEN", "DETECTOR", "WALL", "HUTCH", "CHAMBER"
     ],
     "CURRENT_DEFAULTS": {
-      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0, "crystal1Length": 1.0, "crystal2Length": 1.0 },
+      "DCM": { "exitOffset": 0.5, "braggAngle": 20.0, "padding": "40px each side" },
       "GRATING": { "tiltAngle": 0, "diffractAngle": 15 },
       "THIN_OPTICS": { "width": 12 },
-      "PHYSICAL_LENGTHS": {
-        "SOURCE": 4.0,
-        "GRATING": 2.0,
-        "XBPM": 1.2,
-        "VDCM_CRYSTALS": 1.0,
-        "HDCM_CRYSTALS": 1.0,
-        "VFM": 4.0,
-        "HFM": 4.0,
-        "SAMPLE": 1.2,
-        "DETECTOR": 1.5
-      }
+      "LABELS": { "size": "9px", "bold": false, "toggle": "showLabel property" },
+      "CONSTRUCTION": { "CHAMBER": "Snaps to beam path, dashed-box, transparent bg" }
     }
   },
   {
     "TEMPLATE_EXAMPLES": [
       {
         "NAME": "Single Branch",
-        "USE_CASE": "Standard hard X-ray beamline with dual DCMs and focusing mirrors.",
-        "COMPONENTS_EXAMPLE": [
-          { "type": "SOURCE", "customName": "Undulator", "distance": 0, "length": 4.0 },
-          { "type": "VDCM", "customName": "Monochromator", "distance": 15, "crystal1Length": 1.0, "crystal2Length": 1.0 },
-          { "type": "VFM", "customName": "Vertical Mirror", "distance": 25, "length": 4.0 }
-        ]
+        "USE_CASE": "Standard hard X-ray beamline with dual DCMs and focusing mirrors."
+      },
+      {
+        "NAME": "Diagnostic Line",
+        "USE_CASE": "High-stability monitoring with slit-screen assemblies before every optic."
+      },
+      {
+        "NAME": "Soft X-ray PES",
+        "USE_CASE": "Spectroscopy line with vertical gratings and experimental station hutch."
+      },
+      {
+        "NAME": "Micro-focus Station",
+        "USE_CASE": "Advanced station with up-shifting DCM and dual K-B focusing mirrors."
+      },
+      {
+        "NAME": "Vacuum Chamber Setup",
+        "USE_CASE": "Demonstrates the new Floating Chamber construction snapped directly to the beam path."
       }
     ]
   }

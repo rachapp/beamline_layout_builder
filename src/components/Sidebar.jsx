@@ -109,7 +109,7 @@ export const Sidebar = ({
 
         <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${theme.text}`}>Add Construction</p>
         <div className="flex flex-col gap-2 mb-6">
-          {['WALL', 'HUTCH'].map((key) => {
+          {['WALL', 'CHAMBER', 'HUTCH'].map((key) => {
             const type = TYPES[key];
             return (
               <button key={type.id} onClick={() => addItem(type.id)} className={`flex items-center gap-3 p-3 border rounded-none transition-all text-left group ${placingType === type.id ? 'bg-blue-50 border-blue-400' : theme.buttonBg}`}>

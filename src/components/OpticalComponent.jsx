@@ -109,17 +109,18 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     );
   }
 
-  if (type === 'HUTCH') {
+  if (type === 'HUTCH' || type === 'CHAMBER') {
+    const isChamber = type === 'CHAMBER';
     return (
-      <div className="w-full h-full border-[2px] border-dashed rounded-none"
+      <div className={`w-full h-full border-[2.5px] rounded-none ${isChamber ? 'border-dashed' : 'border-dashed'}`}
            style={{ 
              borderColor: primary,
-             backgroundColor: secondary
+             backgroundColor: isChamber ? (isDarkMode ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)') : secondary,
+             borderStyle: 'dashed'
            }}>
       </div>
     );
-  }
-  
+  }  
   if (type === 'XBPM') {
     return (
       <div className="w-full h-full grid grid-cols-2 grid-rows-2 relative shadow-sm rounded-none" style={{ backgroundColor: theme.compBg, border: `1.5px solid ${primary}` }}>

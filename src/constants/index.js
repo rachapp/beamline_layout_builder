@@ -9,6 +9,7 @@ export const TYPES = {
   GRATING: { id: 'GRATING', name: 'Grating', width: 40, height: 16, defaultLength: 2 },
   WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140 },
   XBPM: { id: 'XBPM', name: 'XBPM', width: 24, height: 24, defaultLength: 1.2 },
+  CHAMBER: { id: 'CHAMBER', name: 'Floating Chamber', width: 80, height: 60 },
   HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140 },
   VDCM: { id: 'VDCM', name: 'VDCM', width: 160, height: 60, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
   HDCM: { id: 'HDCM', name: 'HDCM', width: 160, height: 60, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },

@@ -55,6 +55,15 @@ export const PropertiesWidget = ({
 
       <div className="p-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
         <div>
+           <label className="flex items-center gap-2 text-[10px] font-bold uppercase cursor-pointer mb-2">
+              <input 
+                type="checkbox" 
+                checked={selectedItem.showLabel !== false} 
+                onChange={(e) => updateItemProp('showLabel', e.target.checked)} 
+                className="w-4 h-4 rounded" 
+              />
+              Show Label
+           </label>
            <label className="block text-[10px] font-bold uppercase mb-1">Label Name</label>
            <input 
              type="text" 
@@ -64,7 +73,6 @@ export const PropertiesWidget = ({
              className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
            />
         </div>
-
         <div>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
@@ -264,7 +272,7 @@ export const PropertiesWidget = ({
           </div>
         </div>
 
-        {['WALL', 'HUTCH'].includes(selectedItem.type) ? (
+        {['WALL', 'HUTCH', 'CHAMBER'].includes(selectedItem.type) ? (
           <div className="grid grid-cols-2 gap-2">
             <div>
                <label className="block text-[10px] font-bold uppercase mb-1">Start (m)</label>
@@ -300,7 +308,7 @@ export const PropertiesWidget = ({
           </div>
         )}
 
-        {['HUTCH', 'WALL'].includes(selectedItem.type) && (
+        {['HUTCH', 'WALL', 'CHAMBER'].includes(selectedItem.type) && (
           <div>
             <label className="block text-[10px] font-bold uppercase mb-1 text-blue-500">Construction Height / Width (m)</label>
             <input
@@ -312,12 +320,13 @@ export const PropertiesWidget = ({
                 setItems(items.map(i => {
                   if (i.id === selectedId) {
                      const h = isNaN(val) ? 0 : val;
+                     const isChamber = i.type === 'CHAMBER';
                      return { 
                        ...i, 
                        height: h, 
                        dimY: h * PX_PER_M, 
                        dimZ: h * PX_PER_M,
-                       y: 200 - (h * PX_PER_M) / 2
+                       y: isChamber ? i.y : 200 - (h * PX_PER_M) / 2
                      };
                   }
                   return i;

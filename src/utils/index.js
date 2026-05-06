@@ -2,7 +2,7 @@ import { TYPES, ORIGIN_X, PX_PER_M } from '../constants';
 
 export const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
-    const isRange = ['WALL', 'HUTCH'].includes(item.type);
+    const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
     const dist = parseFloat(item.distance) || 0;
     
     let x = ORIGIN_X + dist * PX_PER_M;
@@ -13,8 +13,9 @@ export const mapTemplateToItems = (templateData) => {
     const h = parseFloat(item.height) ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
     const o = parseFloat(item.offset) ?? 0;
     
-    const y = isRange ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M);
-    const z = isRange ? 150 : 150 + (o * PX_PER_M);
+    const isChamber = item.type === 'CHAMBER';
+    const y = isChamber ? 150 : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M));
+    const z = isChamber ? 150 : ((isRange) ? 150 : 150 + (o * PX_PER_M));
     
     const dimY = isRange ? (h * PX_PER_M) : undefined;
     const dimZ = isRange ? (h * PX_PER_M) : undefined;
@@ -28,7 +29,7 @@ export const mapTemplateToItems = (templateData) => {
       x = (startX + endX) / 2;
       dimX = Math.abs(endX - startX);
     } else if (isRange) {
-      const wMeters = (item.dimX ?? TYPES[item.type].width) / PX_PER_M;
+      const wMeters = (item.dimX ?? itemConfig.width) / PX_PER_M;
       start = dist - wMeters / 2;
       end = dist + wMeters / 2;
     } else if (['VDCM', 'HDCM'].includes(item.type)) {
@@ -51,6 +52,7 @@ export const mapTemplateToItems = (templateData) => {
       distance: isRange ? ((start || 0) + (end || 0)) / 2 : dist,
       dimY,
       dimZ,
+      showLabel: item.showLabel !== false,
       ...(isRange ? { start, end } : {})
     };
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
@@ -64,6 +66,7 @@ export const getDefaultColors = (type, isDarkMode, theme) => {
       case 'GRATING': return { primary: isDarkMode ? '#475569' : '#cbd5e1', secondary: isDarkMode ? '#94a3b8' : '#64748b' };
       case 'WALL': return { primary: isDarkMode ? '#ffffff' : '#000000', secondary: theme.compBg };
       case 'HUTCH': return { primary: isDarkMode ? '#475569' : '#94a3b8', secondary: 'transparent' };
+      case 'CHAMBER': return { primary: isDarkMode ? '#60a5fa' : '#3b82f6', secondary: 'transparent' };
       case 'XBPM': return { primary: theme.compBorder, secondary: '#ef4444' };
       case 'SCREEN': return { primary: '#22c55e', secondary: '#22c55e' };
       case 'VDCM': case 'HDCM': return { primary: '#0891b2', secondary: isDarkMode ? '#164e63' : '#cffafe' };

@@ -14,6 +14,7 @@ export const usePhysicsEngine = (items) => {
       let cItemsMap = {};
 
       // 1. Process Architectural Elements strictly anchored to floor in Side View
+      // Note: CHAMBER is a construction element but snaps to the beam path.
       sorted.forEach(item => {
         if (['WALL', 'HUTCH'].includes(item.type)) {
           let val = item[plane];
@@ -26,7 +27,7 @@ export const usePhysicsEngine = (items) => {
         }
       });
 
-      // 2. Process Traceable Optics
+      // 2. Process Traceable Optics and CHAMBER
       const tracedItems = sorted.filter(i => !['WALL', 'HUTCH'].includes(i.type));
       const sourceIndex = tracedItems.findIndex(i => i.type === 'SOURCE');
       const startIndex = sourceIndex >= 0 ? sourceIndex : 0;

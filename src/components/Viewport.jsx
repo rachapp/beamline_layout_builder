@@ -1,46 +1,22 @@
 import React from 'react';
-import { Layers } from 'lucide-react';
-import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
+import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
+import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
 
 export const Viewport = ({ 
-  viewType, 
-  title, 
-  refObj, 
-  scrollRef, 
-  planeCoord, 
-  tracePoints, 
-  theme, 
-  draggingInfo, 
-  placingType, 
-  pan, 
-  zoom, 
-  showGrid, 
-  showRuler, 
-  canvasWidth, 
-  isDarkMode, 
-  computedItems, 
-  selectedId, 
-  editingLabel, 
-  rayColor, 
-  rayWidth, 
-  rayStyle, 
-  showArrow, 
-  sourceItem, 
-  handleBgPointerDown, 
-  handlePointerMove, 
-  handlePointerUp, 
-  handleWheel, 
-  handlePointerDown, 
-  handleResizePointerDown, 
-  handleLabelPointerDown, 
-  handleLabelDoubleClick, 
-  setEditingLabel, 
-  setItems, 
-  ghostPos 
+  viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
+  draggingInfo, placingType, pan, zoom, showGrid, showRuler, canvasWidth, 
+  isDarkMode, computedItems, selectedId, editingLabel, rayColor, 
+  rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
+  handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
+  handleResizePointerDown, handleLabelPointerDown, handleLabelDoubleClick,
+  setEditingLabel, setItems, ghostPos
 }) => {
   const isPanning = draggingInfo?.type === 'pan' && draggingInfo?.view === viewType;
-  const strokeDasharray = rayStyle === 'dashed' ? '8,4' : (rayStyle === 'dotted' ? '2,4' : 'none');
+
+  let strokeDasharray = 'none';
+  if (rayStyle === 'dashed') strokeDasharray = '8,4';
+  if (rayStyle === 'dotted') strokeDasharray = '2,4';
 
   return (
     <div className="flex-1 flex flex-col relative border-b-2 overflow-hidden" style={{ borderColor: theme.inactiveBorder, backgroundColor: theme.bg }}>
@@ -209,6 +185,8 @@ export const Viewport = ({
 
               const zIndexClass = item.type === 'HUTCH' ? (isSelected ? 'z-[5]' : 'z-0') : (isSelected ? 'z-20' : 'z-10 hover:z-20');
               const resizeHandlePos = viewType === 'SIDE' ? { right: '-6px', top: '-6px', cursor: 'nesw-resize' } : { right: '-6px', bottom: '-6px', cursor: 'nwse-resize' };
+              
+              const labelVisible = item.showLabel !== false;
 
               return (
                 <div
@@ -234,7 +212,7 @@ export const Viewport = ({
                   >
                     <OpticalComponent item={item} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
                     
-                    {isSelected && ['WALL', 'HUTCH'].includes(item.type) && (
+                    {isSelected && ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && (
                       <div 
                         className="absolute w-3 h-3 bg-blue-500 border border-white z-[60]"
                         style={resizeHandlePos}
@@ -244,49 +222,51 @@ export const Viewport = ({
                     )}
                   </div>
 
-                  <div 
-                    className={`absolute whitespace-nowrap text-[9px] px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
-                    style={{ 
-                      transform: 'translateX(-50%)',
-                      left: labelOffsetX,
-                      top: labelOffsetY,
-                      color: isDarkMode ? '#cbd5e1' : '#334155',
-                      textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
-                    }}
-                    onPointerDown={(e) => {
-                      if (isEditing) e.stopPropagation();
-                      else handleLabelPointerDown(e, item.id, viewType);
-                    }}
-                    onDoubleClick={(e) => handleLabelDoubleClick(e, item.id, labelName)}
-                  >
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        autoFocus
-                        value={editingLabel.text}
-                        onChange={(e) => setEditingLabel({ ...editingLabel, text: e.target.value })}
-                        onBlur={(e) => {
-                          setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: e.target.value } : i));
-                          setEditingLabel(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+                  {labelVisible && (
+                    <div 
+                      className={`absolute whitespace-nowrap text-[9px] px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
+                      style={{ 
+                        transform: 'translateX(-50%)',
+                        left: labelOffsetX,
+                        top: labelOffsetY,
+                        color: isDarkMode ? '#cbd5e1' : '#334155',
+                        textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
+                      }}
+                      onPointerDown={(e) => {
+                        if (isEditing) e.stopPropagation();
+                        else handleLabelPointerDown(e, item.id, viewType);
+                      }}
+                      onDoubleClick={(e) => handleLabelDoubleClick(e, item.id, labelName)}
+                    >
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingLabel.text}
+                          onChange={(e) => setEditingLabel({ ...editingLabel, text: e.target.value })}
+                          onBlur={(e) => {
                             setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: e.target.value } : i));
                             setEditingLabel(null);
-                          }
-                          if (e.key === 'Escape') setEditingLabel(null);
-                        }}
-                        className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 text-[9px] select-text"
-                        style={{ 
-                          color: isDarkMode ? '#60a5fa' : '#2563eb',
-                          textShadow: 'none',
-                          width: `${Math.max(editingLabel.text.length * 7, 30)}px` 
-                        }}
-                      />
-                    ) : (
-                      labelName
-                    )}
-                  </div>
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: e.target.value } : i));
+                              setEditingLabel(null);
+                            }
+                            if (e.key === 'Escape') setEditingLabel(null);
+                          }}
+                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 text-[9px] select-text"
+                          style={{ 
+                            color: isDarkMode ? '#60a5fa' : '#2563eb',
+                            textShadow: 'none',
+                            width: `${Math.max(editingLabel.text.length * 7, 30)}px` 
+                          }}
+                        />
+                      ) : (
+                        labelName
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -320,8 +300,12 @@ export const Viewport = ({
                const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;
 
                let ghostY = ghostPos.y;
-               if (viewType === 'SIDE' && ['WALL', 'HUTCH'].includes(placingType)) {
-                  ghostY = 200 - itemH / 2;
+               if (['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
+                  if (placingType === 'CHAMBER') {
+                    ghostY = 150; // Always snap to beam path
+                  } else if (viewType === 'SIDE') {
+                    ghostY = 200 - itemH / 2; // Floor snap
+                  }
                }
 
                let rotation = 0;

@@ -113,7 +113,7 @@ export const useBeamlineState = (computedItems) => {
   const handleOpenJsonModal = () => {
     const sortedItems = [...items].sort((a, b) => (a.distance || 0) - (b.distance || 0));
     const cleanItems = sortedItems.map((item) => {
-      const isRange = ['WALL', 'HUTCH'].includes(item.type);
+      const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
       const isDCM = ['VDCM', 'HDCM'].includes(item.type);
       const isGrating = item.type === 'GRATING';
       const isSource = item.type === 'SOURCE';
@@ -267,28 +267,32 @@ export const useBeamlineState = (computedItems) => {
         setPlacingType(null);
         return;
       }
-      const isRange = ['WALL', 'HUTCH'].includes(placingType);
+      const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(placingType);
       const h = conf.height / PX_PER_M;
       const isDCM = placingType === 'VDCM' || placingType === 'HDCM';
+      const isChamber = placingType === 'CHAMBER';
       const dOffset = isDCM ? 0.5 : 0;
       const bAngle = isDCM ? 20 : 0;
       let finalDimX = conf.width;
+
       if (isDCM) {
         const tan2theta = Math.tan(2 * bAngle * Math.PI / 180);
         const L = Math.abs(tan2theta) > 0.001 ? Math.abs((dOffset * PX_PER_M) / tan2theta) : 40;
         finalDimX = L + 80;
       }
+
       const newItem = { 
         id: Date.now(), 
         type: placingType, 
         x: finalX, 
-        y: view === 'SIDE' ? rawSecondary : 150, 
-        z: view === 'TOP' ? rawSecondary : 150,
+        y: (view === 'SIDE' && !isChamber) ? rawSecondary : 150, 
+        z: (view === 'TOP' && !isChamber) ? rawSecondary : 150,
         distance: newDistance,
-        height: view === 'SIDE' ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0,
-        offset: view === 'TOP' ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0,
+        height: (view === 'SIDE' && !isChamber) ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0,
+        offset: (view === 'TOP' && !isChamber) ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0,
         customName: conf.name,
         dimX: finalDimX,
+        showLabel: true,
         ...(placingType === 'SOURCE' ? { sourceType: 'Undulator' } : {}),
         ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle } : {}),
         ...(isRange ? { 
@@ -296,12 +300,13 @@ export const useBeamlineState = (computedItems) => {
            end: parseFloat((newDistance + (conf.width / 2 / PX_PER_M)).toFixed(2)),
            height: h,
            dimY: conf.height, dimZ: conf.height,
-           y: 200 - conf.height / 2
+           y: (isChamber ? 150 : 200 - conf.height / 2)
         } : {}),
         ...(placingType === 'GRATING' ? { orientation: 'Vertical', tiltAngle: 0, diffractAngle: 15 } : {}),
         ...(placingType === 'SAMPLE' ? { passLight: true } : {}),
         ...(placingType === 'DETECTOR' ? { passLight: false, detectorType: 'Silicon Detector' } : {})
       };
+
       setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
       setSelectedId(newItem.id);
       setLastClickedView(view);
@@ -433,20 +438,25 @@ export const useBeamlineState = (computedItems) => {
     if (!wrapperRef.current) return;
     if (draggingInfo.type === 'component') {
       const rect = wrapperRef.current.getBoundingClientRect();
+      
       let rawX = (e.clientX - rect.left) / zoom + draggingInfo.offsetX;
       let rawSecondary = (e.clientY - rect.top) / zoom + draggingInfo.offsetSecondary; 
+
       if (snapToGrid) {
         rawX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
         rawSecondary = Math.round(rawSecondary / GRID_SIZE) * GRID_SIZE;
       }
-      setItems(items.map(item => {
+
+      setItems(prevItems => prevItems.map(item => {
         if (item.id === draggingInfo.id) {
-          const isSideActive = ['SOURCE', 'VFM', 'VDCM', 'DETECTOR', 'WALL', 'HUTCH', 'SAMPLE'].includes(item.type);
-          const isTopActive = ['SOURCE', 'HFM', 'HDCM', 'DETECTOR', 'WALL', 'HUTCH', 'GRATING', 'SAMPLE'].includes(item.type);
-          const isRange = ['WALL', 'HUTCH'].includes(item.type);
+          const isSideActive = ['SOURCE', 'VFM', 'VDCM', 'DETECTOR', 'WALL', 'HUTCH', 'CHAMBER', 'SAMPLE'].includes(item.type);
+          const isTopActive = ['SOURCE', 'HFM', 'HDCM', 'DETECTOR', 'WALL', 'HUTCH', 'CHAMBER', 'GRATING', 'SAMPLE'].includes(item.type);
+          const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+          
           const newDistance = parseFloat(((rawX - ORIGIN_X) / PX_PER_M).toFixed(2));
           const newHeight = view === 'SIDE' ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : (item.height ?? 0);
           const newOffset = view === 'TOP' ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : (item.offset ?? 0);
+
           let updatedItem = {
             ...item,
             x: rawX,
@@ -456,11 +466,13 @@ export const useBeamlineState = (computedItems) => {
             y: (view === 'SIDE' && isSideActive) ? rawSecondary : item.y,
             z: (view === 'TOP' && isTopActive) ? rawSecondary : item.z
           };
+
           if (isRange) {
              const halfWMeters = (item.dimX ?? 0) / 2 / PX_PER_M;
              updatedItem.start = parseFloat((newDistance - halfWMeters).toFixed(2));
              updatedItem.end = parseFloat((newDistance + halfWMeters).toFixed(2));
           }
+
           return updatedItem;
         }
         return item;
@@ -468,23 +480,31 @@ export const useBeamlineState = (computedItems) => {
     } else if (draggingInfo.type === 'resize') {
       let dx = (e.clientX - draggingInfo.startX) / zoom;
       let dy = (e.clientY - draggingInfo.startY) / zoom;
+
       if (snapToGrid) {
         dx = Math.round(dx / GRID_SIZE) * GRID_SIZE;
         dy = Math.round(dy / GRID_SIZE) * GRID_SIZE;
       }
-      setItems(items.map(item => {
+
+      setItems(prevItems => prevItems.map(item => {
         if (item.id === draggingInfo.id) {
           const newW = Math.max(GRID_SIZE, draggingInfo.startW + dx);
           const newH = Math.max(GRID_SIZE, view === 'SIDE' ? draggingInfo.startH - dy : draggingInfo.startH + dy);
+
           const isSideActive = ['WALL', 'HUTCH'].includes(item.type);
           const isTopActive = ['WALL', 'HUTCH'].includes(item.type);
+          const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+
           const newX = draggingInfo.startXPos + (newW - draggingInfo.startW) / 2;
+          
           let newSecondary = draggingInfo.startSecondaryPos + (newH - draggingInfo.startH) / 2;
           if (view === 'SIDE' && isSideActive) {
             newSecondary = 200 - newH / 2;
           }
+
           const newDistance = parseFloat(((newX - ORIGIN_X) / PX_PER_M).toFixed(1));
-          return {
+
+          let updatedItem = {
             ...item,
             dimX: newW,
             ...(view === 'SIDE' ? { dimY: newH } : { dimZ: newH }),
@@ -493,6 +513,14 @@ export const useBeamlineState = (computedItems) => {
             ...(view === 'SIDE' && isSideActive ? { y: newSecondary } : {}),
             ...(view === 'TOP' && isTopActive ? { z: newSecondary } : {})
           };
+
+          if (isRange) {
+             const halfWMeters = newW / 2 / PX_PER_M;
+             updatedItem.start = parseFloat((newDistance - halfWMeters).toFixed(2));
+             updatedItem.end = parseFloat((newDistance + halfWMeters).toFixed(2));
+          }
+
+          return updatedItem;
         }
         return item;
       }));
@@ -545,7 +573,7 @@ export const useBeamlineState = (computedItems) => {
             updated.dimX = Number(val) * PX_PER_M;
           }
 
-          if (['WALL', 'HUTCH'].includes(i.type)) {
+          if (['WALL', 'HUTCH', 'CHAMBER'].includes(i.type)) {
             const s = propName === 'start' ? Number(val) : (i.start ?? 0);
             const e = propName === 'end' ? Number(val) : (i.end ?? 0);
             const startX = ORIGIN_X + s * PX_PER_M;
