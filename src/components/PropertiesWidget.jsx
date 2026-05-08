@@ -248,29 +248,31 @@ export const PropertiesWidget = ({
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-             <label className="block text-[10px] font-bold uppercase mb-1">Height (m)</label>
+        {!['WALL', 'HUTCH'].includes(selectedItem.type) && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+               <label className="block text-[10px] font-bold uppercase mb-1">Height (m)</label>
 
-             <input
-               type="number"
-               step="0.1"
-               value={selectedItem.height ?? 0}
-               onChange={(e) => updateItemProp('height', e.target.value)}
-               className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-             />
+               <input
+                 type="number"
+                 step="0.1"
+                 value={selectedItem.height ?? 0}
+                 onChange={(e) => updateItemProp('height', e.target.value)}
+                 className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+               />
+            </div>
+            <div>
+               <label className="block text-[10px] font-bold uppercase mb-1">Offset (m)</label>
+               <input
+                 type="number"
+                 step="0.1"
+                 value={selectedItem.offset ?? 0}
+                 onChange={(e) => updateItemProp('offset', e.target.value)}
+                 className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+               />
+            </div>
           </div>
-          <div>
-             <label className="block text-[10px] font-bold uppercase mb-1">Offset (m)</label>
-             <input
-               type="number"
-               step="0.1"
-               value={selectedItem.offset ?? 0}
-               onChange={(e) => updateItemProp('offset', e.target.value)}
-               className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-             />
-          </div>
-        </div>
+        )}
 
         {['WALL', 'HUTCH', 'CHAMBER'].includes(selectedItem.type) ? (
           <div className="grid grid-cols-2 gap-2">

@@ -49,7 +49,7 @@ export const Viewport = ({
             backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`
           }} />
 
-          <svg style={{ position: 'absolute', overflow: 'visible', zIndex: 0 }}>
+          <svg style={{ position: 'absolute', overflow: 'visible', zIndex: 10 }}>
             <defs>
               <marker id={`arrowhead-${viewType}`} markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
                 <polygon points="0 0, 8 3, 0 6" fill={rayColor} />
@@ -183,7 +183,22 @@ export const Viewport = ({
               const labelOffsetX = item.labelOffsets?.[viewType]?.x !== undefined ? item.labelOffsets[viewType].x : (item.type === 'SOURCE' ? -(itemW / 2) : 0);
               const labelOffsetY = item.labelOffsets?.[viewType]?.y !== undefined ? item.labelOffsets[viewType].y : defaultOffsetY;
 
-              const zIndexClass = item.type === 'HUTCH' ? (isSelected ? 'z-[5]' : 'z-0') : (isSelected ? 'z-20' : 'z-10 hover:z-20');
+              let isBeamInFront = false;
+              if (item.type === 'VFM' && viewType === 'TOP' && item.slopeSide < 0) isBeamInFront = true;
+              if (item.type === 'HFM' && viewType === 'SIDE' && item.slopeTop > 0) isBeamInFront = true;
+
+              let zIndex = 20;
+              if (item.type === 'HUTCH') {
+                zIndex = isSelected ? 5 : 0;
+              } else if (isSelected) {
+                zIndex = 40;
+              } else if (isBeamInFront) {
+                zIndex = 5;
+              } else {
+                zIndex = 20;
+              }
+
+              const zIndexClass = `z-[${zIndex}] hover:z-[50]`;
               const resizeHandlePos = viewType === 'SIDE' ? { right: '-6px', top: '-6px', cursor: 'nesw-resize' } : { right: '-6px', bottom: '-6px', cursor: 'nwse-resize' };
               
               const labelVisible = item.showLabel !== false;
@@ -195,6 +210,7 @@ export const Viewport = ({
                   style={{
                     left: item.x,
                     top: item[planeCoord],
+                    zIndex: zIndex,
                     transition: isDraggingThis ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out'
                   }}
                 >

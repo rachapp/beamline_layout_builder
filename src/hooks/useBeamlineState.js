@@ -183,10 +183,15 @@ export const useBeamlineState = (computedItems) => {
         const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
         const h = item.height ?? 0;
         const o = item.offset ?? 0;
-        const y = isRange ? (item.type === 'CHAMBER' ? 150 : 200 - (h * PX_PER_M) / 2) : 150 - (h * PX_PER_M);
-        const z = isRange ? 150 : 150 + (o * PX_PER_M);
-        const dimY = isRange ? (h * PX_PER_M) : undefined;
-        const dimZ = isRange ? (h * PX_PER_M) : undefined;
+        
+        // For range components: y is center. 
+        // WALL/HUTCH: anchored to floor (y=200 - h_px/2). 
+        // CHAMBER: floating relative to beam (y=150 - h_px).
+        const y = isRange ? (item.type === 'CHAMBER' ? 150 - (h * PX_PER_M) : 200 - (h * PX_PER_M) / 2) : 150 - (h * PX_PER_M);
+        const z = isRange ? (item.type === 'CHAMBER' ? 150 + (o * PX_PER_M) : 150) : 150 + (o * PX_PER_M);
+        
+        const dimY = isRange ? (h * PX_PER_M || TYPES[item.type]?.height || 20) : undefined;
+        const dimZ = isRange ? (h * PX_PER_M || TYPES[item.type]?.height || 20) : undefined;
         let x = ORIGIN_X + (item.distance || 0) * PX_PER_M;
 
         let dimX = item.dimX;
@@ -533,6 +538,9 @@ export const useBeamlineState = (computedItems) => {
              const halfWMeters = newW / 2 / PX_PER_M;
              updatedItem.start = parseFloat((newDistance - halfWMeters).toFixed(2));
              updatedItem.end = parseFloat((newDistance + halfWMeters).toFixed(2));
+             updatedItem.height = parseFloat((newH / PX_PER_M).toFixed(2));
+             updatedItem.dimY = newH;
+             updatedItem.dimZ = newH;
           }
 
           return updatedItem;

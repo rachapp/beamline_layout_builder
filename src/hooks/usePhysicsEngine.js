@@ -14,11 +14,11 @@ export const usePhysicsEngine = (items) => {
       let cItemsMap = {};
 
       // 1. Process Architectural Elements strictly anchored to floor in Side View
-      // Note: CHAMBER is a construction element but snaps to the beam path.
+      // Note: CHAMBER is a construction element that can float.
       sorted.forEach(item => {
-        if (['WALL', 'HUTCH'].includes(item.type)) {
+        if (['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) {
           let val = item[plane];
-          if (plane === 'y') {
+          if (plane === 'y' && item.type !== 'CHAMBER') {
             const conf = TYPES[item.type];
             const h = item.dimY ?? conf.height;
             val = 200 - h / 2; 
@@ -27,8 +27,8 @@ export const usePhysicsEngine = (items) => {
         }
       });
 
-      // 2. Process Traceable Optics and CHAMBER
-      const tracedItems = sorted.filter(i => !['WALL', 'HUTCH'].includes(i.type));
+      // 2. Process Traceable Optics
+      const tracedItems = sorted.filter(i => !['WALL', 'HUTCH', 'CHAMBER'].includes(i.type));
       const sourceIndex = tracedItems.findIndex(i => i.type === 'SOURCE');
       const startIndex = sourceIndex >= 0 ? sourceIndex : 0;
       const source = tracedItems[startIndex];
@@ -116,6 +116,10 @@ export const usePhysicsEngine = (items) => {
           prevDist = item.distance;
         }
 
+        if (cItemsMap[item.id]) {
+          cItemsMap[item.id].slope = currSlope;
+        }
+
         if ((item.type === 'SAMPLE' && item.passLight === false) || (item.type === 'DETECTOR' && item.passLight !== true)) {
            beamActive = false; 
         }
@@ -130,6 +134,8 @@ export const usePhysicsEngine = (items) => {
       ...item,
       y: sideData.cItemsMap[item.id]?.y !== undefined ? sideData.cItemsMap[item.id].y : item.y,
       z: topData.cItemsMap[item.id]?.z !== undefined ? topData.cItemsMap[item.id].z : item.z,
+      slopeSide: sideData.cItemsMap[item.id]?.slope ?? 0,
+      slopeTop: topData.cItemsMap[item.id]?.slope ?? 0
     }));
 
     return {

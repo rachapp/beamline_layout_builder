@@ -14,8 +14,8 @@ export const mapTemplateToItems = (templateData) => {
     const o = parseFloat(item.offset) ?? 0;
     
     const isChamber = item.type === 'CHAMBER';
-    const y = isChamber ? 150 : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M));
-    const z = isChamber ? 150 : ((isRange) ? 150 : 150 + (o * PX_PER_M));
+    const y = isChamber ? 150 - (h * PX_PER_M) : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M));
+    const z = isChamber ? 150 + (o * PX_PER_M) : ((isRange) ? 150 : 150 + (o * PX_PER_M));
     
     const dimY = isRange ? (h * PX_PER_M) : undefined;
     const dimZ = isRange ? (h * PX_PER_M) : undefined;
