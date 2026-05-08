@@ -127,12 +127,13 @@ export const useBeamlineState = (computedItems) => {
       const exportItem = {
         type: item.type,
         customName,
+        showLabel: item.showLabel !== false,
         distance: item.distance ?? 0,
         height: item.height ?? 0,
         offset: item.offset ?? 0
       };
 
-      if (!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH'].includes(item.type)) {
+      if (!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) {
         exportItem.length = item.length ?? (TYPES[item.type].defaultLength || (item.dimX / PX_PER_M));
       }
       if (isRange) {
@@ -179,15 +180,26 @@ export const useBeamlineState = (computedItems) => {
       const parsed = JSON.parse(jsonText);
       if (!Array.isArray(parsed)) throw new Error("JSON must be an array of components.");
       const newItems = parsed.map((item, idx) => {
-        const isRange = ['WALL', 'HUTCH'].includes(item.type);
+        const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
         const h = item.height ?? 0;
         const o = item.offset ?? 0;
-        const y = isRange ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M);
+        const y = isRange ? (item.type === 'CHAMBER' ? 150 : 200 - (h * PX_PER_M) / 2) : 150 - (h * PX_PER_M);
         const z = isRange ? 150 : 150 + (o * PX_PER_M);
         const dimY = isRange ? (h * PX_PER_M) : undefined;
         const dimZ = isRange ? (h * PX_PER_M) : undefined;
         let x = ORIGIN_X + (item.distance || 0) * PX_PER_M;
-        let dimX = item.dimX ?? TYPES[item.type]?.width ?? 20;
+
+        let dimX = item.dimX;
+        if (dimX === undefined) {
+           if (item.length !== undefined) {
+              dimX = item.length * PX_PER_M;
+           } else if (item.start !== undefined && item.end !== undefined) {
+              dimX = Math.abs(item.end - item.start) * PX_PER_M;
+           } else {
+              dimX = TYPES[item.type]?.width ?? 20;
+           }
+        }
+
         let start = item.start;
         let end = item.end;
         if (isRange && start !== undefined && end !== undefined) {
@@ -200,6 +212,9 @@ export const useBeamlineState = (computedItems) => {
           const wMeters = dimX / PX_PER_M;
           start = d - wMeters / 2;
           end = d + wMeters / 2;
+          const startX = ORIGIN_X + start * PX_PER_M;
+          const endX = ORIGIN_X + end * PX_PER_M;
+          x = (startX + endX) / 2;
         } else if (['VDCM', 'HDCM'].includes(item.type)) {
           const D_m = item.exitOffset ?? 0.5;
           const theta_deg = item.braggAngle ?? 20;

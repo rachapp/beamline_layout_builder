@@ -211,7 +211,7 @@ export const PropertiesWidget = ({
           </div>
         )}
 
-        {!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH', 'VDCM', 'HDCM'].includes(selectedItem.type) && (
+        {!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH', 'CHAMBER', 'VDCM', 'HDCM'].includes(selectedItem.type) && (
           <div>
              <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Physical Length (m)</label>
              <input
