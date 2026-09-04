@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson } from 'lucide-react';
+import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson, Tag } from 'lucide-react';
 import { TYPES, templates } from '../constants';
 
 export const Sidebar = ({ 
@@ -15,6 +15,8 @@ export const Sidebar = ({
   setSnapToGrid, 
   showRuler, 
   setShowRuler, 
+  showAnnotations,
+  setShowAnnotations,
   canvasLength, 
   setCanvasLength, 
   activeView, 
@@ -69,15 +71,18 @@ export const Sidebar = ({
               <button onClick={() => setShowRuler(!showRuler)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${showRuler ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
                 <Ruler size={14} /> Ruler
               </button>
-              <div className="flex flex-col">
-                <label className={`text-[10px] font-bold uppercase mb-0.5 ${theme.text}`}>Len (m)</label>
-                <input
-                  type="number"
-                  value={canvasLength}
-                  onChange={(e) => setCanvasLength(Math.max(1, Number(e.target.value)))}
-                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-                />
-              </div>
+              <button onClick={() => setShowAnnotations(!showAnnotations)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${showAnnotations ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
+                <Tag size={14} /> Annotate
+              </button>
+            </div>
+            <div className="flex flex-col mt-1">
+              <label className={`text-[10px] font-bold uppercase mb-0.5 ${theme.text}`}>Len (m)</label>
+              <input
+                type="number"
+                value={canvasLength}
+                onChange={(e) => setCanvasLength(Math.max(1, Number(e.target.value)))}
+                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+              />
             </div>
             <div className="grid grid-cols-3 gap-2 mt-2">
               <button onClick={() => setActiveView('TOP')} className={`flex items-center justify-center p-2 border rounded-none text-xs font-bold transition-colors ${activeView === 'TOP' ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>

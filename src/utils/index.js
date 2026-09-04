@@ -7,8 +7,32 @@ export const mapTemplateToItems = (templateData) => {
     
     let x = ORIGIN_X + dist * PX_PER_M;
     const itemConfig = TYPES[item.type];
-    const physicalLength = item.length ?? itemConfig.defaultLength;
-    let dimX = physicalLength !== undefined ? (physicalLength * PX_PER_M) : (item.dimX ?? itemConfig.width);
+    let sourceProps = {};
+    if (item.type === 'SOURCE') {
+      const sType = item.sourceType || 'Undulator';
+      if (sType === 'Bending Magnet') {
+        const sLen = item.length !== undefined ? parseFloat(item.length) : 1.5;
+        sourceProps = {
+          sourceType: sType,
+          length: sLen,
+          dimX: sLen * PX_PER_M
+        };
+      } else {
+        const periodLength = item.periodLength !== undefined ? parseFloat(item.periodLength) : (sType === 'Wiggler' ? 100 : 50);
+        const numPeriods = item.numPeriods !== undefined ? parseInt(item.numPeriods) : (item.length !== undefined ? Math.max(1, Math.round((parseFloat(item.length) * 1000) / periodLength)) : (sType === 'Wiggler' ? 20 : 40));
+        const length = item.length !== undefined ? parseFloat(item.length) : parseFloat(((periodLength * numPeriods) / 1000).toFixed(3));
+        sourceProps = {
+          sourceType: sType,
+          periodLength,
+          numPeriods,
+          length,
+          dimX: length * PX_PER_M
+        };
+      }
+    }
+
+    const physicalLength = sourceProps.length ?? (item.length !== undefined ? parseFloat(item.length) : itemConfig.defaultLength);
+    let dimX = sourceProps.dimX ?? (physicalLength !== undefined ? (physicalLength * PX_PER_M) : (item.dimX ?? itemConfig.width));
     
     const h = parseFloat(item.height) ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
     const o = parseFloat(item.offset) ?? 0;
@@ -42,6 +66,8 @@ export const mapTemplateToItems = (templateData) => {
 
     return {
       ...item,
+      ...sourceProps,
+      length: physicalLength,
       id: Date.now() + idx,
       x,
       dimX,

@@ -16,37 +16,65 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     if (sType === 'Bending Magnet') {
       if (viewType === 'TOP') {
         return (
-          <svg width="100%" height="100%" viewBox="0 0 80 24" style={{ overflow: 'visible' }} className="drop-shadow-sm">
-            <path d="M 0,16 Q 40,-4 80,16 L 80,32 Q 40,12 0,32 Z" fill={primary} stroke={secondary} strokeWidth="1.5" />
+          <svg width="100%" height="100%" viewBox="0 0 80 24" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+            <path d="M 0,16 Q 40,-4 80,16 L 80,32 Q 40,12 0,32 Z"
+                  fill={primary} stroke={secondary} strokeWidth="1.5" />
           </svg>
         );
       }
       return (
         <div className="flex flex-col w-full h-full justify-between bg-transparent">
-          <div className="flex w-full h-[45%] shadow-sm rounded-none" style={{ backgroundColor: primary, border: `1.5px solid ${theme.compBorder}`}}></div>
-          <div className="flex w-full h-[45%] shadow-sm rounded-none" style={{ backgroundColor: secondary, border: `1.5px solid ${theme.compBorder}`}}></div>
+          <div className="flex w-full h-[45%] shadow-sm rounded-none"
+               style={{ backgroundColor: primary, border: `1.5px solid ${theme.compBorder}` }} />
+          <div className="flex w-full h-[45%] shadow-sm rounded-none"
+               style={{ backgroundColor: secondary, border: `1.5px solid ${theme.compBorder}` }} />
         </div>
       );
     }
 
-    const periods = sType === 'Wiggler' ? 4 : 6;
+    // Number of periods divided by 10 for visual scaling (e.g. 20 periods -> 2 visual periods)
+    const rawPeriods = Math.max(1, parseInt(item.numPeriods) || (sType === 'Wiggler' ? 20 : 40));
+    const visualPeriods = Math.max(1, Math.round(rawPeriods / 10));
+    const totalPoles = visualPeriods * 2; // 2 poles (N & S) per period
 
     if (viewType === 'TOP') {
       return (
-        <div className="flex flex-col w-full h-full shadow-sm rounded-none overflow-hidden" style={{ backgroundColor: 'transparent', border: `1.5px solid ${theme.compBorder}`}}>
+        <div className="flex flex-col w-full h-full shadow-sm rounded-none overflow-hidden"
+             style={{ backgroundColor: 'transparent', border: `1.5px solid ${theme.compBorder}` }}>
           <div className="flex w-full h-full">
-            {[...Array(periods)].map((_, i) => <div key={i} className="flex-1" style={{backgroundColor: i % 2 === 0 ? primary : secondary}} />)}
+            {[...Array(totalPoles)].map((_, i) => (
+              <div key={i}
+                   className="flex-1 min-w-0 h-full border-r last:border-r-0 border-black/15"
+                   style={{ backgroundColor: i % 2 === 0 ? primary : secondary }} />
+            ))}
           </div>
         </div>
       );
     }
+
     return (
       <div className="flex flex-col w-full h-full justify-between bg-transparent">
-        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden" style={{ border: `1.5px solid ${theme.compBorder}`}}>
-          {[...Array(periods)].map((_, i) => <div key={i} className="flex-1" style={{backgroundColor: i % 2 === 0 ? primary : secondary}} />)}
+        {/* Upper pole array */}
+        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden"
+             style={{ border: `1.5px solid ${theme.compBorder}` }}>
+          <div className="flex w-full h-full">
+            {[...Array(totalPoles)].map((_, i) => (
+              <div key={i}
+                   className="flex-1 min-w-0 h-full border-r last:border-r-0 border-black/15"
+                   style={{ backgroundColor: i % 2 === 0 ? primary : secondary }} />
+            ))}
+          </div>
         </div>
-        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden" style={{ border: `1.5px solid ${theme.compBorder}`}}>
-          {[...Array(periods)].map((_, i) => <div key={i} className="flex-1" style={{backgroundColor: i % 2 === 0 ? secondary : primary}} />)}
+        {/* Lower pole array (phase-flipped: secondary first) */}
+        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden"
+             style={{ border: `1.5px solid ${theme.compBorder}` }}>
+          <div className="flex w-full h-full">
+            {[...Array(totalPoles)].map((_, i) => (
+              <div key={i}
+                   className="flex-1 min-w-0 h-full border-r last:border-r-0 border-black/15"
+                   style={{ backgroundColor: i % 2 === 0 ? secondary : primary }} />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -75,7 +103,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
   if (type === 'SAMPLE') {
     return (
       <div className="w-full h-full flex justify-center items-center shadow-sm relative bg-transparent">
-         <div className="w-4 h-4 rounded-full border-[2.5px]" style={{ borderColor: primary, backgroundColor: item.passLight === false ? secondary : 'transparent' }} />
+         <div className="w-2 h-2 rounded-full border-[1.5px]" style={{ borderColor: primary, backgroundColor: item.passLight === false ? secondary : 'transparent' }} />
       </div>
     );
   }
@@ -91,7 +119,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     }
     return (
       <div className="w-full h-full flex flex-col justify-start shadow-sm rounded-none border" style={{ borderColor: theme.compBorder, backgroundColor: primary }}>
-         <div className="w-full h-[6px] opacity-70" style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 2px, ${secondary} 2px, ${secondary} 4px)` }} />
+         <div className="w-full h-[3px] opacity-70" style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 2px, ${secondary} 2px, ${secondary} 4px)` }} />
       </div>
     );
   }
@@ -123,12 +151,12 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
   }  
   if (type === 'XBPM') {
     return (
-      <div className="w-full h-full grid grid-cols-2 grid-rows-2 relative shadow-sm rounded-none" style={{ backgroundColor: theme.compBg, border: `1.5px solid ${primary}` }}>
+      <div className="w-full h-full grid grid-cols-2 grid-rows-2 relative shadow-sm rounded-none" style={{ backgroundColor: theme.compBg, border: `1px solid ${primary}` }}>
         <div className="border-r border-b" style={{ borderColor: primary }}></div>
         <div className="border-b" style={{ borderColor: primary }}></div>
         <div className="border-r" style={{ borderColor: primary }}></div>
         <div></div>
-        <div className="absolute top-1/2 left-1/2 w-2 h-2 rounded-none transform -translate-x-1/2 -translate-y-1/2" style={{ backgroundColor: secondary, boxShadow: `0 0 4px ${secondary}`}}></div>
+        <div className="absolute top-1/2 left-1/2 w-[5.66px] h-[5.66px] rounded-full transform -translate-x-1/2 -translate-y-1/2" style={{ backgroundColor: secondary, boxShadow: `0 0 3px ${secondary}`}}></div>
       </div>
     );
   }
@@ -238,7 +266,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     let innerContent = null;
     if (dType === 'Ionization Chamber') {
        innerContent = (
-          <div className="flex flex-col gap-2 w-full h-full items-center justify-center">
+          <div className="flex flex-col gap-1.5 w-full h-full items-center justify-center">
              <div className="w-3/4 h-[2px] opacity-70" style={{ backgroundColor: secondary }}></div>
              <div className="w-3/4 h-[2px] opacity-70" style={{ backgroundColor: secondary }}></div>
           </div>
@@ -246,10 +274,10 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     } else if (dType === 'Silicon Detector') {
        innerContent = <div className="w-1/3 h-1/3 opacity-70" style={{ backgroundColor: secondary }}></div>;
     } else if (dType === 'Image Plate') {
-       innerContent = <div className="w-[4px] h-[90%] opacity-80" style={{ backgroundColor: secondary }}></div>;
+       innerContent = <div className="w-[3px] h-[90%] opacity-80" style={{ backgroundColor: secondary }}></div>;
     } else if (dType === 'Strip Detector') {
        innerContent = (
-          <div className="flex gap-[2px] w-full h-full items-center justify-center p-1">
+          <div className="flex gap-[1.5px] w-full h-full items-center justify-center p-0.5">
              <div className="w-[2px] h-3/4 opacity-70" style={{ backgroundColor: secondary }}></div>
              <div className="w-[2px] h-3/4 opacity-70" style={{ backgroundColor: secondary }}></div>
              <div className="w-[2px] h-3/4 opacity-70" style={{ backgroundColor: secondary }}></div>
@@ -260,7 +288,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     return (
       <div className="w-full h-full shadow-sm rounded-none flex items-center justify-center relative" style={{ backgroundColor: primary, border: `1.5px solid ${theme.compBorder}` }}>
          {innerContent}
-         {isBlocking && <div className="absolute right-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: secondary }}></div>}
+         {isBlocking && <div className="absolute right-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: secondary }}></div>}
       </div>
     );
   }

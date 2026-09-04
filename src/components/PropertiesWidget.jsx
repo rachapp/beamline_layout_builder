@@ -96,7 +96,7 @@ export const PropertiesWidget = ({
           </div>
           <button 
             onClick={() => {
-              setItems(items.map(i => i.id === selectedId ? { ...i, primaryColor: undefined, secondaryColor: undefined } : i));
+              setItems(prev => prev.map(i => i.id === selectedId ? { ...i, primaryColor: undefined, secondaryColor: undefined } : i));
             }}
             className={`w-full p-1 border rounded-none text-[10px] font-bold transition-colors ${theme.buttonBg} ${theme.text}`}
           >
@@ -105,17 +105,41 @@ export const PropertiesWidget = ({
         </div>
 
         {selectedItem.type === 'SOURCE' && (
-          <div>
-            <label className="block text-[10px] font-bold uppercase mb-1">Source Type</label>
-            <select
-              value={selectedItem.sourceType || 'Undulator'}
-              onChange={(e) => updateItemProp('sourceType', e.target.value)}
-              className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-            >
-              <option value="Undulator">Undulator</option>
-              <option value="Wiggler">Wiggler</option>
-              <option value="Bending Magnet">Bending Magnet</option>
-            </select>
+          <div className="flex flex-col gap-2">
+            <div>
+              <label className="block text-[10px] font-bold uppercase mb-1">Source Type</label>
+              <select
+                value={selectedItem.sourceType || 'Undulator'}
+                onChange={(e) => updateItemProp('sourceType', e.target.value)}
+                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+              >
+                <option value="Undulator">Undulator</option>
+                <option value="Wiggler">Wiggler</option>
+                <option value="Bending Magnet">Bending Magnet</option>
+              </select>
+            </div>
+            {selectedItem.sourceType !== 'Bending Magnet' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Period (mm)</label>
+                  <input
+                    type="number"
+                    value={selectedItem.periodLength ?? (selectedItem.sourceType === 'Wiggler' ? 100 : 50)}
+                    onChange={(e) => updateItemProp('periodLength', parseFloat(e.target.value))}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Num Periods</label>
+                  <input
+                    type="number"
+                    value={selectedItem.numPeriods ?? (selectedItem.sourceType === 'Wiggler' ? 20 : 40)}
+                    onChange={(e) => updateItemProp('numPeriods', parseInt(e.target.value))}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, templates } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
 import { mapTemplateToItems } from '../utils';
 
 export const useBeamlineState = (computedItems) => {
@@ -19,6 +19,7 @@ export const useBeamlineState = (computedItems) => {
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [showRuler, setShowRuler] = useState(true);
+  const [showAnnotations, setShowAnnotations] = useState(true);
   const [canvasLength, setCanvasLength] = useState(50);
   const [showUI, setShowUI] = useState(true);
   const [activeView, setActiveView] = useState('BOTH'); 
@@ -46,11 +47,88 @@ export const useBeamlineState = (computedItems) => {
         setPlacingType(null);
         setGhostPos(null);
         setEditingLabel(null);
+        return;
+      }
+
+      const activeTag = document.activeElement?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') {
+        return;
+      }
+
+      if (editingLabel) {
+        return;
+      }
+
+      if (!selectedId) {
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelected();
+        return;
+      }
+
+      const step = e.shiftKey ? 1.0 : SNAP_STEP_M;  // Shift = 1 m, normal = 0.1 m
+
+      const targetView = activeView === 'BOTH'
+        ? (lastClickedView || 'SIDE')
+        : activeView;
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const direction = e.key === 'ArrowLeft' ? -1 : 1;
+
+        setItems(prevItems => prevItems.map(item => {
+          if (item.id !== selectedId) return item;
+
+          const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+          const currentDist = item.distance ??
+            (isRange ? ((item.start ?? 0) + (item.end ?? 0)) / 2 : 0);
+          const newDist = parseFloat((currentDist + direction * step).toFixed(2));
+          const newX = ORIGIN_X + newDist * PX_PER_M;
+
+          const updated = { ...item, distance: newDist, x: newX };
+
+          if (isRange) {
+            updated.start = parseFloat(((item.start ?? 0) + direction * step).toFixed(2));
+            updated.end   = parseFloat(((item.end   ?? 0) + direction * step).toFixed(2));
+          }
+          return updated;
+        }).sort((a, b) => (a.distance || 0) - (b.distance || 0)));
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const direction = e.key === 'ArrowUp' ? 1 : -1;  // Up = increase height / decrease offset
+
+        setItems(prevItems => prevItems.map(item => {
+          if (item.id !== selectedId) return item;
+
+          // These types cannot be moved vertically
+          if (['WALL', 'HUTCH'].includes(item.type)) return item;
+          // Detectors locked to path also skip vertical movement
+          if (item.type === 'DETECTOR' && item.stayInPath !== false) return item;
+
+          if (targetView === 'SIDE') {
+            // SIDE view: adjust height above beam
+            const currentH = item.height ?? 0;
+            const newH = parseFloat((currentH + direction * step).toFixed(2));
+            const newY = 150 - newH * PX_PER_M;
+            return { ...item, height: newH, y: newY };
+          } else {
+            // TOP view: adjust lateral offset (Up = move toward viewer = negative offset)
+            const currentO = item.offset ?? 0;
+            const newO = parseFloat((currentO - direction * step).toFixed(2));
+            const newZ = 150 + newO * PX_PER_M;
+            return { ...item, offset: newO, z: newZ };
+          }
+        }));
       }
     };
+
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [selectedId, editingLabel, activeView, lastClickedView]);
 
   useEffect(() => {
     const handleWidgetMove = (e) => {
@@ -277,8 +355,20 @@ export const useBeamlineState = (computedItems) => {
       let rawX = (e.clientX - rect.left) / zoom;
       let rawSecondary = (e.clientY - rect.top) / zoom;
       if (snapToGrid) {
-        rawX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
-        rawSecondary = Math.round(rawSecondary / GRID_SIZE) * GRID_SIZE;
+        const rawDist = (rawX - ORIGIN_X) / PX_PER_M;
+        const snappedDist = Math.round(rawDist / SNAP_STEP_M) * SNAP_STEP_M;
+        rawX = ORIGIN_X + snappedDist * PX_PER_M;
+
+        const rayCoord = 150;
+        if (view === 'SIDE') {
+          const rawHeight = (rayCoord - rawSecondary) / PX_PER_M;
+          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayCoord - snappedHeight * PX_PER_M;
+        } else {
+          const rawOffset = (rawSecondary - rayCoord) / PX_PER_M;
+          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayCoord + snappedOffset * PX_PER_M;
+        }
       }
       const newDistance = parseFloat(((rawX - ORIGIN_X) / PX_PER_M).toFixed(2));
       const finalX = ORIGIN_X + newDistance * PX_PER_M; 
@@ -299,6 +389,8 @@ export const useBeamlineState = (computedItems) => {
         const tan2theta = Math.tan(2 * bAngle * Math.PI / 180);
         const L = Math.abs(tan2theta) > 0.001 ? Math.abs((dOffset * PX_PER_M) / tan2theta) : 40;
         finalDimX = L + 80;
+      } else if (placingType === 'SOURCE') {
+        finalDimX = 2.0 * PX_PER_M;
       }
 
       const newItem = { 
@@ -313,7 +405,12 @@ export const useBeamlineState = (computedItems) => {
         customName: conf.name,
         dimX: finalDimX,
         showLabel: true,
-        ...(placingType === 'SOURCE' ? { sourceType: 'Undulator' } : {}),
+        ...(placingType === 'SOURCE' ? { 
+          sourceType: 'Undulator',
+          periodLength: 50,
+          numPeriods: 40,
+          length: 2.0
+        } : {}),
         ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle } : {}),
         ...(isRange ? { 
            start: parseFloat((newDistance - (conf.width / 2 / PX_PER_M)).toFixed(2)), 
@@ -437,8 +534,23 @@ export const useBeamlineState = (computedItems) => {
       let rawX = (e.clientX - rect.left) / zoom;
       let rawSecondary = (e.clientY - rect.top) / zoom; 
       if (snapToGrid) {
-        rawX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
-        rawSecondary = Math.round(rawSecondary / GRID_SIZE) * GRID_SIZE;
+        const rawDist = (rawX - ORIGIN_X) / PX_PER_M;
+        const snappedDist = Math.round(rawDist / SNAP_STEP_M) * SNAP_STEP_M;
+        rawX = ORIGIN_X + snappedDist * PX_PER_M;
+
+        const rayCoord = 150;
+        // SIDE view — snap height above beam
+        if (view === 'SIDE') {
+          const rawHeight = (rayCoord - rawSecondary) / PX_PER_M;
+          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayCoord - snappedHeight * PX_PER_M;
+        }
+        // TOP view — snap lateral offset from beam
+        else {
+          const rawOffset = (rawSecondary - rayCoord) / PX_PER_M;
+          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayCoord + snappedOffset * PX_PER_M;
+        }
       }
       setGhostPos({ view, x: rawX, y: rawSecondary });
       return;
@@ -463,8 +575,21 @@ export const useBeamlineState = (computedItems) => {
       let rawSecondary = (e.clientY - rect.top) / zoom + draggingInfo.offsetSecondary; 
 
       if (snapToGrid) {
-        rawX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
-        rawSecondary = Math.round(rawSecondary / GRID_SIZE) * GRID_SIZE;
+        const rawDist = (rawX - ORIGIN_X) / PX_PER_M;
+        const snappedDist = Math.round(rawDist / SNAP_STEP_M) * SNAP_STEP_M;
+        rawX = ORIGIN_X + snappedDist * PX_PER_M;
+
+        const rayNominal = 150;
+        // SIDE view — snap height relative to branch ray
+        if (view === 'SIDE') {
+          const rawHeight = (rayNominal - rawSecondary) / PX_PER_M;
+          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayNominal - snappedHeight * PX_PER_M;
+        } else {
+          const rawOffset = (rawSecondary - rayNominal) / PX_PER_M;
+          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
+          rawSecondary = rayNominal + snappedOffset * PX_PER_M;
+        }
       }
 
       setItems(prevItems => prevItems.map(item => {
@@ -502,8 +627,10 @@ export const useBeamlineState = (computedItems) => {
       let dy = (e.clientY - draggingInfo.startY) / zoom;
 
       if (snapToGrid) {
-        dx = Math.round(dx / GRID_SIZE) * GRID_SIZE;
-        dy = Math.round(dy / GRID_SIZE) * GRID_SIZE;
+        const dx_m = Math.round((dx / PX_PER_M) / SNAP_STEP_M) * SNAP_STEP_M;
+        const dy_m = Math.round((dy / PX_PER_M) / SNAP_STEP_M) * SNAP_STEP_M;
+        dx = dx_m * PX_PER_M;
+        dy = dy_m * PX_PER_M;
       }
 
       setItems(prevItems => prevItems.map(item => {
@@ -568,7 +695,12 @@ export const useBeamlineState = (computedItems) => {
     }
   };
 
-  const handlePointerUp = () => setDraggingInfo(null);
+  const handlePointerUp = () => {
+    if (draggingInfo?.type === 'component') {
+      setItems(prev => [...prev].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
+    }
+    setDraggingInfo(null);
+  };
 
   const handleLabelDoubleClick = (e, id, defaultText) => {
     e.stopPropagation();
@@ -582,18 +714,55 @@ export const useBeamlineState = (computedItems) => {
 
   const deleteSelected = () => {
     if (selectedId) {
-      setItems(items.filter(i => i.id !== selectedId));
+      setItems(prev => prev.filter(i => i.id !== selectedId));
       setSelectedId(null);
     }
   };
 
   const updateItemProp = (propName, val) => {
     if (selectedId) {
-      setItems(items.map(i => {
+      setItems(prevItems => prevItems.map(i => {
         if (i.id === selectedId) {
           const updated = { ...i, [propName]: val };
-          if (propName === 'length' && !isNaN(val) && val !== '') {
-            updated.dimX = Number(val) * PX_PER_M;
+
+          if (i.type === 'SOURCE') {
+            if (propName === 'numPeriods' && !isNaN(val) && val !== '') {
+              const n = Math.max(1, parseInt(val));
+              const pLen = updated.periodLength || (updated.sourceType === 'Wiggler' ? 100 : 50);
+              updated.numPeriods = n;
+              updated.length = parseFloat(((n * pLen) / 1000).toFixed(3));
+              updated.dimX = updated.length * PX_PER_M;
+            } else if (propName === 'periodLength' && !isNaN(val) && val !== '') {
+              const pLen = Math.max(1, parseFloat(val));
+              const n = updated.numPeriods || (updated.sourceType === 'Wiggler' ? 20 : 40);
+              updated.periodLength = pLen;
+              updated.length = parseFloat(((n * pLen) / 1000).toFixed(3));
+              updated.dimX = updated.length * PX_PER_M;
+            } else if (propName === 'length' && !isNaN(val) && val !== '') {
+              const len = Math.max(0.1, parseFloat(val));
+              updated.length = len;
+              updated.dimX = len * PX_PER_M;
+              if (updated.sourceType !== 'Bending Magnet') {
+                const pLen = updated.periodLength || (updated.sourceType === 'Wiggler' ? 100 : 50);
+                updated.numPeriods = Math.max(1, Math.round((len * 1000) / pLen));
+              }
+            } else if (propName === 'sourceType') {
+              if (val === 'Bending Magnet') {
+                updated.dimX = 30;
+                updated.length = 1.5;
+              } else {
+                const pLen = val === 'Wiggler' ? 100 : 50;
+                const n = val === 'Wiggler' ? 20 : 40;
+                updated.periodLength = pLen;
+                updated.numPeriods = n;
+                updated.length = parseFloat(((pLen * n) / 1000).toFixed(3));
+                updated.dimX = updated.length * PX_PER_M;
+              }
+            }
+          } else {
+            if (propName === 'length' && !isNaN(val) && val !== '') {
+              updated.dimX = Number(val) * PX_PER_M;
+            }
           }
 
           if (['WALL', 'HUTCH', 'CHAMBER'].includes(i.type)) {
@@ -633,6 +802,7 @@ export const useBeamlineState = (computedItems) => {
     editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos,
     widgetPos, setWidgetPos, isDraggingWidget, setIsDraggingWidget, widgetDragRef,
     zoom, setZoom, showGrid, setShowGrid, snapToGrid, setSnapToGrid, showRuler, setShowRuler,
+    showAnnotations, setShowAnnotations,
     canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView,
     lastClickedView, setLastClickedView, isJsonModalOpen, setIsJsonModalOpen,
     jsonText, setJsonText, pan, setPan, sideViewRef, topViewRef, sideScrollRef, topScrollRef,

@@ -5,7 +5,7 @@ import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
-  draggingInfo, placingType, pan, zoom, showGrid, showRuler, canvasWidth, 
+  draggingInfo, placingType, pan, zoom, showGrid, showRuler, showAnnotations = true, canvasWidth, 
   isDarkMode, computedItems, selectedId, editingLabel, rayColor, 
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
@@ -70,7 +70,7 @@ export const Viewport = ({
 
             {showRuler && (
               <g className="ruler-layer">
-                <line x1="0" y1="40" x2={canvasWidth} y2="40" stroke={isDarkMode ? '#475569' : '#94a3b8'} strokeWidth="2" />
+                <line x1="0" y1="65" x2={canvasWidth} y2="65" stroke={isDarkMode ? '#475569' : '#94a3b8'} strokeWidth="2" />
                 {(() => {
                   const maxMeters = Math.ceil(canvasWidth / PX_PER_M);
                   const ticks = [];
@@ -81,14 +81,14 @@ export const Viewport = ({
                     ticks.push(
                       <g key={`ruler-${m}`}>
                         <line 
-                          x1={x} y1="40" 
-                          x2={x} y2={isMajor ? "50" : "45"} 
+                          x1={x} y1="65" 
+                          x2={x} y2={isMajor ? "55" : "60"} 
                           stroke={isDarkMode ? '#475569' : '#94a3b8'} 
                           strokeWidth={isMajor ? "2" : "1"} 
                         />
                         {isMajor && (
                           <text 
-                            x={x} y="32" 
+                            x={x} y="52" 
                             fill={isDarkMode ? '#94a3b8' : '#64748b'} 
                             fontSize="10" 
                             fontFamily="sans-serif" 
@@ -105,6 +105,142 @@ export const Viewport = ({
                 })()}
               </g>
             )}
+
+            {showAnnotations && (() => {
+              // Pass 1: Compute annotation data for each item
+              const candidateItems = (computedItems || []).filter(
+                (item) => !item.isBranchHidden && !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)
+              );
+
+              const sortedAnnotations = candidateItems.map((item) => {
+                const isSelected = selectedId === item.id;
+                const elemY = viewType === 'SIDE' ? item.y : item.z;
+                const itemH = viewType === 'SIDE'
+                  ? (item.dimY ?? TYPES[item.type]?.height ?? 20)
+                  : (item.dimZ ?? TYPES[item.type]?.height ?? 20);
+                // Push targetY toward the ruler (y=65) from the element centre
+                const targetY = elemY > 65 ? (elemY - itemH / 2) : (elemY + itemH / 2);
+
+                // Point elements
+                const posX = item.x;
+                const distVal = item.distance !== undefined
+                  ? item.distance
+                  : (posX - ORIGIN_X) / PX_PER_M;
+                const labelText = `${parseFloat(Number(distVal).toFixed(2))}m`;
+                const badgeWidth = Math.max(34, labelText.length * 6.5 + 10);
+
+                return {
+                  item,
+                  isSelected,
+                  elemY,
+                  itemH,
+                  targetY,
+                  posX,
+                  labelText,
+                  badgeWidth,
+                  left: posX - badgeWidth / 2,
+                  right: posX + badgeWidth / 2
+                };
+              }).sort((a, b) => a.posX - b.posX);
+
+              // Pass 2: Greedy stagger layout (non-overlapping levels)
+              const levelEndPositions = [];  // tracks rightmost x used on each level
+              const minGap = 6;              // minimum horizontal gap between badges (px)
+
+              const layoutItems = sortedAnnotations.map((annot) => {
+                let assignedLevel = -1;
+
+                // Find the lowest existing level where this badge fits
+                for (let lvl = 0; lvl < levelEndPositions.length; lvl++) {
+                  if (annot.left >= levelEndPositions[lvl] + minGap) {
+                    assignedLevel = lvl;
+                    break;
+                  }
+                }
+
+                if (assignedLevel === -1) {
+                  // No level fits — open a new one
+                  assignedLevel = levelEndPositions.length;
+                  levelEndPositions.push(annot.right);
+                } else {
+                  levelEndPositions[assignedLevel] = annot.right;
+                }
+
+                // Vertical positions
+                const badgeBottom = 38 - assignedLevel * 18;  // baseline of badge, above ruler
+                const badgeY      = badgeBottom - 15;          // top of 15px-tall badge rect
+
+                return { ...annot, level: assignedLevel, badgeBottom, badgeY };
+              });
+
+              // Pass 3: Render SVG elements
+              return (
+                <g className="annotations-layer" style={{ pointerEvents: 'none' }}>
+                  {layoutItems.map((annot) => {
+                    const { item, isSelected, targetY, posX, labelText, badgeWidth, badgeBottom, badgeY } = annot;
+                    const strokeColor = isSelected ? '#3b82f6' : (isDarkMode ? '#64748b' : '#94a3b8');
+                    const badgeBorder = isSelected ? '#3b82f6' : (isDarkMode ? '#475569' : '#cbd5e1');
+                    const badgeBg     = isDarkMode ? '#0f172a' : '#ffffff';
+                    const textColor   = isSelected
+                      ? (isDarkMode ? '#60a5fa' : '#2563eb')
+                      : (isDarkMode ? '#94a3b8' : '#475569');
+
+                    return (
+                      <g key={`annotation-${item.id}`} opacity={isSelected ? 1 : 0.85}>
+                        {/* 1. Dashed vertical leader line: element centre → badge bottom */}
+                        <line
+                          x1={posX} y1={targetY}
+                          x2={posX} y2={badgeBottom}
+                          stroke={strokeColor}
+                          strokeWidth={isSelected ? "1.5" : "1"}
+                          strokeDasharray="2,2"
+                        />
+
+                        {/* 2. Tick mark on the ruler baseline */}
+                        <line
+                          x1={posX - 3} y1="65"
+                          x2={posX + 3} y2="65"
+                          stroke={strokeColor} strokeWidth="2"
+                        />
+
+                        {/* 3. Dot at the element's touch point */}
+                        <circle
+                          cx={posX} cy={targetY}
+                          r={isSelected ? "2.5" : "2"}
+                          fill={strokeColor}
+                        />
+
+                        {/* 4. Badge rectangle */}
+                        <rect
+                          x={posX - badgeWidth / 2}
+                          y={badgeY}
+                          width={badgeWidth}
+                          height="15"
+                          rx="3"
+                          fill={badgeBg}
+                          stroke={badgeBorder}
+                          strokeWidth="1"
+                          opacity="0.95"
+                        />
+
+                        {/* 5. Distance label text */}
+                        <text
+                          x={posX}
+                          y={badgeY + 11}
+                          fill={textColor}
+                          fontSize="9"
+                          fontFamily="sans-serif"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                        >
+                          {labelText}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            })()}
 
             {tracePoints.length > 1 && (
               <path

@@ -49,6 +49,8 @@ export default function App() {
         setSnapToGrid={state.setSnapToGrid}
         showRuler={state.showRuler}
         setShowRuler={state.setShowRuler}
+        showAnnotations={state.showAnnotations}
+        setShowAnnotations={state.setShowAnnotations}
         canvasLength={state.canvasLength}
         setCanvasLength={state.setCanvasLength}
         activeView={state.activeView}
@@ -74,6 +76,7 @@ export default function App() {
             zoom={state.zoom}
             showGrid={state.showGrid}
             showRuler={state.showRuler}
+            showAnnotations={state.showAnnotations}
             canvasWidth={state.canvasWidth}
             isDarkMode={isDarkMode}
             computedItems={computedItems}
@@ -112,6 +115,7 @@ export default function App() {
             zoom={state.zoom}
             showGrid={state.showGrid}
             showRuler={state.showRuler}
+            showAnnotations={state.showAnnotations}
             canvasWidth={state.canvasWidth}
             isDarkMode={isDarkMode}
             computedItems={computedItems}
