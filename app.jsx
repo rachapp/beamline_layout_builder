@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Sun, PanelLeftClose, PanelLeftOpen, Sliders, Table, Sparkles, FileDown } from 'lucide-react';
+import { Moon, Sun, PanelLeftClose, PanelLeftOpen, Sliders, Table, Sparkles, FileDown, FileUp, ChevronRight } from 'lucide-react';
 
 import { useTheme } from './src/hooks/useTheme';
 import { usePhysicsEngine } from './src/hooks/usePhysicsEngine';
@@ -63,6 +63,30 @@ export default function App() {
             <span className="hidden md:inline">Export CSV</span>
          </button>
 
+         {/* Import CSV Button */}
+         <label 
+           title="Import Beamline from CSV File" 
+           className={`px-2.5 py-1.5 border shadow-sm rounded-none transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500`}
+         >
+            <FileUp size={16} className="text-emerald-500" />
+            <span className="hidden md:inline">Import CSV</span>
+            <input 
+              type="file" 
+              accept=".csv,text/csv" 
+              className="hidden" 
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  if (evt.target?.result) state.handleImportCsv(evt.target.result);
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }} 
+            />
+         </label>
+
          <button 
            onClick={() => state.setIsSettingsModalOpen(true)} 
            title="Global Canvas Settings (Text Size, etc.)" 
@@ -81,6 +105,7 @@ export default function App() {
       {/* SIDEBAR PALETTE */}
       <Sidebar 
         showUI={state.showUI}
+        setShowUI={state.setShowUI}
         theme={theme}
         loadTemplate={state.loadTemplate}
         handleFitToScreen={state.handleFitToScreen}
@@ -108,7 +133,19 @@ export default function App() {
         setIsCadExportOpen={state.setIsCadExportOpen}
         items={state.items}
         onExportCsv={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
+        onImportCsv={state.handleImportCsv}
       />
+
+      {/* EXPAND LEFT UI TAB (Visible when Sidebar is collapsed) */}
+      {!state.showUI && (
+        <button
+          onClick={() => state.setShowUI(true)}
+          title="Show Left Sidebar"
+          className={`absolute left-0 top-16 z-40 p-1.5 pl-2 pr-2.5 border-y border-r shadow-lg rounded-r-md transition-all hover:pl-3 flex items-center gap-1 ${theme.buttonBg} ${theme.text} hover:border-blue-500`}
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
 
       {/* DUAL VIEWPORT AREA + TABLE */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ backgroundColor: theme.canvasBg }}>
@@ -154,6 +191,7 @@ export default function App() {
             canvasSettings={state.canvasSettings}
           />
         )}
+
         {state.activeView !== 'TOP' && (
           <Viewport 
             viewType="SIDE"
@@ -211,18 +249,18 @@ export default function App() {
             viewMode={state.tableViewMode}
             setViewMode={state.setTableViewMode}
             onOpenCadExport={() => state.setIsCadExportOpen(true)}
+            onFocusItem={state.focusItem}
+            onImportCsv={state.handleImportCsv}
+            onExportCsv={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
           />
         )}
       </div>
 
-      {/* DRAGGABLE FLOATING PROPERTIES WIDGET */}
+      {/* DOCKED RIGHT SIDE PROPERTIES WIDGET */}
       <PropertiesWidget 
         selectedItem={state.selectedItem}
-        widgetPos={state.widgetPos}
         theme={theme}
         isDarkMode={isDarkMode}
-        setIsDraggingWidget={state.setIsDraggingWidget}
-        widgetDragRef={state.widgetDragRef}
         setSelectedId={state.setSelectedId}
         updateItemProp={state.updateItemProp}
         items={state.items}
@@ -230,6 +268,8 @@ export default function App() {
         selectedId={state.selectedId}
         deleteSelected={state.deleteSelected}
         canvasSettings={state.canvasSettings}
+        setCanvasSettings={state.setCanvasSettings}
+        activeView={state.activeView}
       />
 
       {/* JSON DATA PORTAL MODAL */}

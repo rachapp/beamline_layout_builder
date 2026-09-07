@@ -1,4 +1,4 @@
-import { TYPES, ORIGIN_X, PX_PER_M } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M } from '../constants/index.js';
 
 export const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
@@ -92,6 +92,8 @@ export const mapTemplateToItems = (templateData) => {
       dimY,
       dimZ,
       showLabel: item.showLabel !== false,
+      showFootprint: Boolean(item.showFootprint),
+      showFootprintText: Boolean(item.showFootprintText),
       ...(isRange ? { start, end } : (isSource ? { start, end } : {}))
     };
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));

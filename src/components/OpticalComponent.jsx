@@ -2,7 +2,7 @@ import React from 'react';
 import { TYPES } from '../constants';
 import { getDefaultColors } from '../utils';
 
-export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMode }) => {
+export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints, theme, isDarkMode }) => {
   const type = item.type;
   const planeCoord = viewType === 'SIDE' ? 'y' : 'z';
   
@@ -190,7 +190,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     const isInactive = (type === 'VDCM' && viewType === 'TOP') || (type === 'HDCM' && viewType === 'SIDE');
     if (isInactive) {
       return (
-         <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none" style={{ backgroundColor: theme.inactiveBg, border: `1px dashed ${theme.inactiveBorder}` }}>
+         <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none" style={{ backgroundColor: theme.inactiveBg }}>
            <div className="w-full h-[1.5px]" style={{ backgroundColor: theme.inactiveBorder }} />
          </div>
       );
@@ -199,10 +199,12 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     const conf = TYPES[type];
     const housingH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
     const centerY = housingH / 2;
-    const itemW = item.dimX ?? conf.width;
+    const itemW = propItemW ?? (item.dimX ?? conf.width);
 
-    const offset = item.exitOffset ?? 0.5;
-    const theta_deg = item.braggAngle ?? 20;
+    const parsedOffset = parseFloat(item.exitOffset);
+    const offset = !isNaN(parsedOffset) ? parsedOffset : 0.5;
+    const parsedTheta = parseFloat(item.braggAngle);
+    const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 20;
     const theta_rad = theta_deg * Math.PI / 180;
     const tan2theta = Math.tan(2 * theta_rad);
     const L = Math.abs(tan2theta) > 0.001 ? Math.abs((offset * 20) / tan2theta) : 40;
@@ -255,7 +257,7 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     const c2Len = (item.crystal2Length ?? TYPES[type].defaultCrystal2Length) * 20;
 
     return (
-      <div className="w-full h-full relative rounded-none" style={{ border: `1px dashed ${theme.inactiveBorder}` }}>
+      <div className="w-full h-full relative rounded-none">
         <div className={`absolute flex flex-col shadow-sm rounded-none ${c1Config.justify}`}
              style={{ width: `${c1Len}px`, height: '5px', left: `${c1Config.left}px`, top: `${c1Config.top}px`, transformOrigin: c1Config.origin, transform: `${c1Config.translate} rotate(${c1Config.rot}rad)`, ...crystalStyle}}>
           <div className="w-full h-1/2 opacity-50" style={hatchStyle} />

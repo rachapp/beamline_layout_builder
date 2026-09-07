@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
+import { getOpticPhysicalLengthM, getItemBoundsM } from '../utils/constructionUtils';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
@@ -29,17 +30,33 @@ export const Viewport = ({
         ref={scrollRef}
         className={`flex-1 relative overflow-hidden ${placingType ? 'cursor-crosshair' : (isPanning ? 'cursor-grabbing' : 'cursor-grab')}`} 
         style={{ backgroundColor: theme.canvasBg }} 
-        onPointerDown={(e) => handleBgPointerDown(e, viewType)}
+        onPointerDown={(e) => {
+          if (e.button === 0) {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+          }
+          handleBgPointerDown(e, viewType);
+        }}
         onPointerMove={(e) => handlePointerMove(e, viewType, refObj)}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onPointerUp={(e) => {
+          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+            e.currentTarget.releasePointerCapture?.(e.pointerId);
+          }
+          handlePointerUp();
+        }}
+        onPointerCancel={(e) => {
+          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+            e.currentTarget.releasePointerCapture?.(e.pointerId);
+          }
+          handlePointerUp();
+        }}
         onWheel={(e) => handleWheel(e, viewType, scrollRef)}
       >
         <div 
           className="absolute inset-0"
           style={{
             transform: `translate(${pan[viewType].x}px, ${pan[viewType].y}px) scale(${zoom})`,
-            transformOrigin: '0 0'
+            transformOrigin: '0 0',
+            transition: isPanning ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)'
           }}
         >
           <div style={{
@@ -285,22 +302,41 @@ export const Viewport = ({
               const isDCM = item.type === 'VDCM' || item.type === 'HDCM';
               const isSource = item.type === 'SOURCE';
 
+              const bounds = getItemBoundsM(item);
+              const physLengthM = bounds.physLen;
+
               // Visual width of component graphic:
-              // Range elements (WALL/HUTCH/CHAMBER), DCM housing, and SOURCE scale with their visual length.
-              // All optical components (SLIT, FILTER, XBPM, SCREEN, VFM, HFM, SAMPLE, DETECTOR, GRATING)
-              // retain their intrinsic un-stretched icon width!
-              const itemW = (isRange || isDCM || isSource) ? (item.dimX ?? conf.width) : conf.width;
+              // Physical length visualizes the optics itself on the canvas!
+              // Range elements (WALL/HUTCH/CHAMBER) scale with their span.
+              // SOURCE scales with its physical length.
+              // DCM scales with its housing / crystal span (dimX).
+              // All optical components scale with their physical length (min 6px).
+              const itemW = (isRange || isSource || isDCM)
+                ? (item.dimX ?? conf.width)
+                : Math.max(6, physLengthM * PX_PER_M);
               const itemH = item.type === 'XBPM' 
                 ? conf.height 
                 : (viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height));
 
-              // Physical footprint envelope (dashed bounding box)
-              const physLengthM = item.length !== undefined && !isNaN(item.length)
-                ? parseFloat(item.length)
-                : (conf.defaultLength || parseFloat(((conf.width || 20) / PX_PER_M).toFixed(3)));
-              const footprintW = Math.max(1, physLengthM * PX_PER_M);
+              // Chamber footprint box envelope (dashed bounding box)
+              const globalShowFootprints = canvasSettings?.showFootprintBoxes !== false;
+              const showFootprintBox = !isRange && Boolean(item.showFootprint) && globalShowFootprints;
+              const showFootprintText = item.showFootprintText !== false && canvasSettings?.showFootprintText !== false;
+              const footprintW = Math.max(4, bounds.len * PX_PER_M);
               const footprintH = Math.max(itemH + 14, 28);
-              const showFootprintBox = !isRange && Boolean(item.showFootprint);
+              // Asymmetric chamber offset from optic center
+              const deltaBoxPx = isSource ? 0 : (((bounds.start + bounds.end) / 2) - bounds.dist) * PX_PER_M;
+              let chamberBoxTop = 0;
+              if (isSimpleMirrorActive) {
+                chamberBoxTop = itemH / 2;
+              } else if (isDCM) {
+                const isDCMActivePlane = (item.type === 'VDCM' && viewType === 'SIDE') || (item.type === 'HDCM' && viewType === 'TOP');
+                if (isDCMActivePlane) {
+                  const parsedOffset = parseFloat(item.exitOffset);
+                  const offset_m = !isNaN(parsedOffset) ? parsedOffset : 0.5;
+                  chamberBoxTop = (offset_m * PX_PER_M) / 2;
+                }
+              }
 
               let rotation = 0;
               if (item.type === 'GRATING' || isSimpleMirrorActive) {
@@ -323,8 +359,10 @@ export const Viewport = ({
 
               let dcmAnchorX = 40;
               if (isDCM) {
-                const d_m = item.exitOffset ?? 0.5;
-                const th_deg = item.braggAngle ?? 20;
+                const parsedD = parseFloat(item.exitOffset);
+                const d_m = !isNaN(parsedD) ? parsedD : 0.5;
+                const parsedTh = parseFloat(item.braggAngle);
+                const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
                 const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
                 const L = Math.abs(tan2th) > 0.001 ? Math.abs((d_m * PX_PER_M) / tan2th) : 40;
                 dcmAnchorX = Math.max(10, (itemW - L) / 2);
@@ -384,16 +422,17 @@ export const Viewport = ({
                     transition: isDraggingThis ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out'
                   }}
                 >
-                  {/* FOOTPRINT ENVELOPE (DASHED BOX) */}
+                  {/* CHAMBER FOOTPRINT ENVELOPE (DASHED BOX) */}
                   {showFootprintBox && (
                     <div
-                      className="absolute pointer-events-none rounded-none flex items-start justify-center transition-all duration-150"
+                      className={`absolute pointer-events-none rounded-none flex items-start justify-center ${isDraggingThis ? '' : 'transition-all duration-150'}`}
                       style={{
                         width: `${footprintW}px`,
                         height: `${footprintH}px`,
-                        left: 0,
-                        top: 0,
+                        left: `${deltaBoxPx}px`,
+                        top: `${chamberBoxTop}px`,
                         transform: isSource ? 'translate(-100%, -50%)' : 'translate(-50%, -50%)',
+                        transition: isDraggingThis ? 'none' : undefined,
                         border: isSelected 
                           ? '1.5px dashed #3b82f6' 
                           : `1px dashed ${isDarkMode ? 'rgba(56, 189, 248, 0.7)' : 'rgba(2, 132, 199, 0.7)'}`,
@@ -403,24 +442,43 @@ export const Viewport = ({
                         zIndex: isSelected ? 30 : 10,
                       }}
                     >
-                      <span
-                        className="text-[9px] font-mono tracking-tight px-1 py-0 select-none pointer-events-none"
-                        style={{
-                          transform: 'translateY(-100%)',
-                          color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : (isDarkMode ? '#38bdf8' : '#0284c7'),
-                          fontWeight: isSelected ? '700' : '500',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        L: {physLengthM}m
-                      </span>
+                      {showFootprintText && (
+                        <span
+                          className="text-[9px] font-mono tracking-tight px-1 py-0 select-none pointer-events-none"
+                          style={{
+                            transform: 'translateY(-100%)',
+                            color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : (isDarkMode ? '#38bdf8' : '#0284c7'),
+                            fontWeight: isSelected ? '700' : '500',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          L: {bounds.len}m
+                        </span>
+                      )}
                     </div>
                   )}
 
                   <div
-                    onPointerDown={(e) => handlePointerDown(e, item.id, viewType, refObj)}
+                    onPointerDown={(e) => {
+                      if (e.button === 0) {
+                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                      }
+                      handlePointerDown(e, item.id, viewType, refObj);
+                    }}
+                    onPointerUp={(e) => {
+                      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                        e.currentTarget.releasePointerCapture?.(e.pointerId);
+                      }
+                      handlePointerUp();
+                    }}
+                    onPointerCancel={(e) => {
+                      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                        e.currentTarget.releasePointerCapture?.(e.pointerId);
+                      }
+                      handlePointerUp();
+                    }}
                     onClick={(e) => e.stopPropagation()}
-                    className={`absolute ${placingType ? 'pointer-events-none' : 'cursor-grab active:cursor-grabbing'} ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-400 hover:ring-offset-1'}`}
+                    className={`absolute ${placingType ? 'pointer-events-none' : (item.isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing')} ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-400 hover:ring-offset-1'}`}
                     style={{
                       width: itemW,
                       height: itemH,
@@ -429,13 +487,30 @@ export const Viewport = ({
                       transition: isDraggingThis ? 'none' : 'transform 0.1s ease-out, width 0.1s ease-out, height 0.1s ease-out'
                     }}
                   >
-                    <OpticalComponent item={item} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
+                    <OpticalComponent item={item} itemW={itemW} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
                     
                     {isSelected && ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && (
                       <div 
                         className="absolute w-3 h-3 bg-blue-500 border border-white z-[60]"
                         style={resizeHandlePos}
-                        onPointerDown={(e) => handleResizePointerDown(e, item.id, viewType)}
+                        onPointerDown={(e) => {
+                          if (e.button === 0) {
+                            e.currentTarget.setPointerCapture?.(e.pointerId);
+                          }
+                          handleResizePointerDown(e, item.id, viewType);
+                        }}
+                        onPointerUp={(e) => {
+                          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                            e.currentTarget.releasePointerCapture?.(e.pointerId);
+                          }
+                          handlePointerUp();
+                        }}
+                        onPointerCancel={(e) => {
+                          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                            e.currentTarget.releasePointerCapture?.(e.pointerId);
+                          }
+                          handlePointerUp();
+                        }}
                         onClick={(e) => e.stopPropagation()}
                       />
                     )}
@@ -454,8 +529,26 @@ export const Viewport = ({
                         textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
                       }}
                       onPointerDown={(e) => {
-                        if (isEditing) e.stopPropagation();
-                        else handleLabelPointerDown(e, item.id, viewType);
+                        if (isEditing) {
+                          e.stopPropagation();
+                        } else {
+                          if (e.button === 0) {
+                            e.currentTarget.setPointerCapture?.(e.pointerId);
+                          }
+                          handleLabelPointerDown(e, item.id, viewType);
+                        }
+                      }}
+                      onPointerUp={(e) => {
+                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                          e.currentTarget.releasePointerCapture?.(e.pointerId);
+                        }
+                        handlePointerUp();
+                      }}
+                      onPointerCancel={(e) => {
+                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                          e.currentTarget.releasePointerCapture?.(e.pointerId);
+                        }
+                        handlePointerUp();
                       }}
                       onDoubleClick={(e) => handleLabelDoubleClick(e, item.id, labelName)}
                     >
@@ -548,7 +641,7 @@ export const Viewport = ({
                      transform: `${transformOffset} rotate(${rotation}rad)`
                    }}
                  >
-                   <OpticalComponent item={mockItem} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
+                    <OpticalComponent item={mockItem} itemW={itemW} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
                  </div>
                );
             })()}

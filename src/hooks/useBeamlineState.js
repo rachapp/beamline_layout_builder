@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
 import { mapTemplateToItems } from '../utils';
-import { calculateUpdatedBounds, getItemBoundsM } from '../utils/constructionUtils';
+import { calculateUpdatedBounds, getItemBoundsM, parseCsvToItems } from '../utils/constructionUtils';
 
 export const useBeamlineState = (computedItems) => {
   const [items, setItems] = useState(() => mapTemplateToItems(templates["Single Branch"]));
@@ -11,10 +11,6 @@ export const useBeamlineState = (computedItems) => {
   
   const [placingType, setPlacingType] = useState(null);
   const [ghostPos, setGhostPos] = useState(null);
-
-  const [widgetPos, setWidgetPos] = useState({ x: 1000, y: 80 });
-  const [isDraggingWidget, setIsDraggingWidget] = useState(false);
-  const widgetDragRef = useRef({ offsetX: 0, offsetY: 0 });
 
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -39,6 +35,8 @@ export const useBeamlineState = (computedItems) => {
         const parsed = JSON.parse(saved);
         return {
           showLabels: parsed.showLabels !== undefined ? parsed.showLabels : true,
+          showFootprintBoxes: parsed.showFootprintBoxes !== undefined ? parsed.showFootprintBoxes : true,
+          showFootprintText: parsed.showFootprintText !== undefined ? parsed.showFootprintText : true,
           textSize: parsed.textSize ?? 10,
           annotationTextSize: parsed.annotationTextSize ?? 9,
           rulerTextSize: parsed.rulerTextSize ?? 10,
@@ -48,6 +46,8 @@ export const useBeamlineState = (computedItems) => {
     } catch (e) {}
     return {
       showLabels: true,
+      showFootprintBoxes: true,
+      showFootprintText: true,
       textSize: 10,
       annotationTextSize: 9,
       rulerTextSize: 10,
@@ -92,14 +92,22 @@ export const useBeamlineState = (computedItems) => {
   }, [items]);
 
   const handleFitToScreen = (customItems = null) => {
-    const targetItems = customItems || itemsRef.current || items;
-    const viewRef = (activeView === 'SIDE' ? sideScrollRef.current : topScrollRef.current) 
-      || sideScrollRef.current 
-      || topScrollRef.current;
-    if (!viewRef) return false;
-    const containerW = viewRef.clientWidth;
-    const containerH = viewRef.clientHeight;
-    if (containerW <= 0 || containerH <= 0) return false;
+    // If called directly from an event handler like onClick={handleFitToScreen},
+    // customItems will be a SyntheticEvent object rather than an array of items.
+    const targetItems = Array.isArray(customItems) ? customItems : (itemsRef.current || items);
+    
+    const topContainer = topScrollRef.current;
+    const sideContainer = sideScrollRef.current;
+    const activeContainer = (activeView === 'SIDE' ? sideContainer : topContainer) 
+      || topContainer 
+      || sideContainer;
+
+    if (!activeContainer && !topContainer && !sideContainer) return false;
+
+    // Use the primary container or whichever is available for horizontal measurement
+    const primaryContainer = activeContainer || topContainer || sideContainer;
+    const containerW = primaryContainer.clientWidth;
+    if (containerW <= 0) return false;
 
     let minX = Infinity, maxX = -Infinity;
     targetItems.forEach(i => {
@@ -148,7 +156,13 @@ export const useBeamlineState = (computedItems) => {
 
     // Framing vertically around the optical axis (Y = 150)
     const contentH = 240;
-    const zoomY = Math.max(0.1, (containerH - 40) / contentH);
+    const availableH = Math.min(
+      (topContainer && topContainer.clientHeight > 0) ? topContainer.clientHeight : Infinity,
+      (sideContainer && sideContainer.clientHeight > 0) ? sideContainer.clientHeight : Infinity,
+      primaryContainer.clientHeight > 0 ? primaryContainer.clientHeight : Infinity
+    );
+    if (!Number.isFinite(availableH) || availableH <= 40) return false;
+    const zoomY = Math.max(0.1, (availableH - 40) / contentH);
 
     let newZoom = Math.min(zoomX, zoomY);
     newZoom = Math.max(0.1, Math.min(newZoom, 2.5));
@@ -157,11 +171,63 @@ export const useBeamlineState = (computedItems) => {
     setZoom(newZoom);
 
     const targetPanX = Math.round(containerW / 2 - ((minX + maxX) / 2) * newZoom);
-    const targetPanY = Math.round(containerH / 2 - 150 * newZoom);
+    
+    // Compute Y pan per container height so both TOP and SIDE viewports center the beam axis at 150px
+    const topH = topContainer?.clientHeight || primaryContainer.clientHeight;
+    const sideH = sideContainer?.clientHeight || primaryContainer.clientHeight;
+    const topPanY = Math.round(topH / 2 - 150 * newZoom);
+    const sidePanY = Math.round(sideH / 2 - 150 * newZoom);
 
     setPan({
-      TOP: { x: targetPanX, y: targetPanY },
-      SIDE: { x: targetPanX, y: targetPanY }
+      TOP: { x: targetPanX, y: topPanY },
+      SIDE: { x: targetPanX, y: sidePanY }
+    });
+
+    return true;
+  };
+
+  const focusItem = (targetItemOrId) => {
+    const item = typeof targetItemOrId === 'object' && targetItemOrId !== null
+      ? targetItemOrId
+      : items.find(i => i.id === targetItemOrId);
+    if (!item) return false;
+
+    // Execute in requestAnimationFrame to ensure the container clientWidth accounts for
+    // the docked right Properties Widget (w-80 = 320px) which renders upon selection.
+    requestAnimationFrame(() => {
+      const topContainer = topScrollRef.current;
+      const sideContainer = sideScrollRef.current;
+      const activeContainer = (activeView === 'SIDE' ? sideContainer : topContainer)
+        || topContainer
+        || sideContainer;
+
+      if (!activeContainer && !topContainer && !sideContainer) return;
+
+      const primaryContainer = activeContainer || topContainer || sideContainer;
+      const containerW = primaryContainer.clientWidth;
+      if (containerW <= 0) return;
+
+      // Component target center X in canvas space
+      const targetCenterX = item.x ?? (ORIGIN_X + (item.distance || 0) * PX_PER_M);
+
+      // Keep current zoom if it provides good visibility (>= 0.6), otherwise bump to comfortable reading zoom
+      const effectiveZoom = zoom < 0.6 ? 0.9 : zoom;
+      if (effectiveZoom !== zoom) {
+        setZoom(effectiveZoom);
+      }
+
+      const targetPanX = Math.round(containerW / 2 - targetCenterX * effectiveZoom);
+
+      // Optical beam axis is centered at Y = 150px
+      const topH = topContainer?.clientHeight || primaryContainer.clientHeight;
+      const sideH = sideContainer?.clientHeight || primaryContainer.clientHeight;
+      const topPanY = Math.round(topH / 2 - 150 * effectiveZoom);
+      const sidePanY = Math.round(sideH / 2 - 150 * effectiveZoom);
+
+      setPan({
+        TOP: { x: targetPanX, y: topPanY },
+        SIDE: { x: targetPanX, y: sidePanY }
+      });
     });
 
     return true;
@@ -251,18 +317,28 @@ export const useBeamlineState = (computedItems) => {
 
         setItems(prevItems => prevItems.map(item => {
           if (item.id !== selectedId) return item;
+          if (item.isLocked) return item; // locked optics cannot be moved accidentally
 
           const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
-          const currentDist = item.distance ??
-            (isRange ? ((item.start ?? 0) + (item.end ?? 0)) / 2 : 0);
-          const newDist = parseFloat((currentDist + direction * step).toFixed(2));
+          const bounds = getItemBoundsM(item);
+          const currentDist = item.distance ?? bounds.dist;
+          const delta = direction * step;
+          const newDist = parseFloat((currentDist + delta).toFixed(2));
           const newX = ORIGIN_X + newDist * PX_PER_M;
 
           const updated = { ...item, distance: newDist, x: newX };
 
           if (isRange) {
-            updated.start = parseFloat(((item.start ?? 0) + direction * step).toFixed(2));
-            updated.end   = parseFloat(((item.end   ?? 0) + direction * step).toFixed(2));
+            updated.start = parseFloat(((item.start ?? bounds.start) + delta).toFixed(2));
+            updated.end   = parseFloat(((item.end   ?? bounds.end) + delta).toFixed(2));
+          } else if (item.type === 'SOURCE') {
+            const sLen = bounds.physLen;
+            updated.end = newDist;
+            updated.start = parseFloat((newDist - sLen).toFixed(3));
+          } else {
+            // Translate chamber footprint envelope synchronously with parent optic
+            updated.start = parseFloat((bounds.start + delta).toFixed(3));
+            updated.end   = parseFloat((bounds.end + delta).toFixed(3));
           }
           return updated;
         }).sort((a, b) => (a.distance || 0) - (b.distance || 0)));
@@ -274,6 +350,7 @@ export const useBeamlineState = (computedItems) => {
 
         setItems(prevItems => prevItems.map(item => {
           if (item.id !== selectedId) return item;
+          if (item.isLocked) return item; // locked optics cannot be moved accidentally
 
           // These types cannot be moved vertically
           if (['WALL', 'HUTCH'].includes(item.type)) return item;
@@ -300,27 +377,6 @@ export const useBeamlineState = (computedItems) => {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [selectedId, editingLabel, activeView, lastClickedView]);
-
-  useEffect(() => {
-    const handleWidgetMove = (e) => {
-      if (isDraggingWidget) {
-        setWidgetPos({
-          x: e.clientX - widgetDragRef.current.offsetX,
-          y: e.clientY - widgetDragRef.current.offsetY
-        });
-      }
-    };
-    const handleWidgetUp = () => setIsDraggingWidget(false);
-
-    if (isDraggingWidget) {
-      window.addEventListener('pointermove', handleWidgetMove);
-      window.addEventListener('pointerup', handleWidgetUp);
-    }
-    return () => {
-      window.removeEventListener('pointermove', handleWidgetMove);
-      window.removeEventListener('pointerup', handleWidgetUp);
-    };
-  }, [isDraggingWidget]);
 
   const canvasWidth = ORIGIN_X + (canvasLength + 10) * PX_PER_M;
 
@@ -559,6 +615,8 @@ export const useBeamlineState = (computedItems) => {
         customName: conf.name,
         dimX: finalDimX,
         showLabel: true,
+        showFootprint: false,
+        showFootprintText: false,
         ...(placingType === 'SOURCE' ? { 
           sourceType: 'Undulator',
           periodLength: 50,
@@ -619,12 +677,22 @@ export const useBeamlineState = (computedItems) => {
     const pointerSecondary = (e.clientY - rect.top) / zoom; 
     setSelectedId(id);
     setLastClickedView(view);
+    if (item.isLocked) {
+      focusItem(id);
+      return;
+    }
+    const bounds = getItemBoundsM(item);
     setDraggingInfo({ 
       type: 'component',
       id, 
       view,
+      startX: e.clientX,
+      startY: e.clientY,
       offsetX: item.x - pointerX,
-      offsetSecondary: (view === 'SIDE' ? item.y : item.z) - pointerSecondary
+      offsetSecondary: (view === 'SIDE' ? item.y : item.z) - pointerSecondary,
+      startDist: bounds.dist,
+      startChamberStart: bounds.start,
+      startChamberEnd: bounds.end
     });
   };
 
@@ -636,7 +704,7 @@ export const useBeamlineState = (computedItems) => {
     e.stopPropagation();
     e.preventDefault();
     const item = items.find(i => i.id === id);
-    if (!item) return;
+    if (!item || item.isLocked) return;
     const conf = TYPES[item.type];
     const startW = item.dimX ?? conf.width;
     const startH = view === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
@@ -729,6 +797,10 @@ export const useBeamlineState = (computedItems) => {
     }
     if (!wrapperRef.current) return;
     if (draggingInfo.type === 'component') {
+      const dist = Math.hypot(e.clientX - (draggingInfo.startX ?? e.clientX), e.clientY - (draggingInfo.startY ?? e.clientY));
+      if (dist > 4) {
+        draggingInfo.hasMoved = true;
+      }
       const rect = wrapperRef.current.getBoundingClientRect();
       
       let rawX = (e.clientX - rect.left) / zoom + draggingInfo.offsetX;
@@ -780,6 +852,20 @@ export const useBeamlineState = (computedItems) => {
              const sLen = getItemLengthM(item);
              updatedItem.end = newDistance;
              updatedItem.start = parseFloat((newDistance - sLen).toFixed(3));
+          } else {
+             // Translate chamber footprint envelope synchronously with parent optic
+             const startChamberStart = draggingInfo.startChamberStart !== undefined 
+               ? draggingInfo.startChamberStart 
+               : getItemBoundsM(item).start;
+             const startChamberEnd = draggingInfo.startChamberEnd !== undefined 
+               ? draggingInfo.startChamberEnd 
+               : getItemBoundsM(item).end;
+             const startDist = draggingInfo.startDist !== undefined 
+               ? draggingInfo.startDist 
+               : (item.distance ?? newDistance);
+             const delta = newDistance - startDist;
+             updatedItem.start = parseFloat((startChamberStart + delta).toFixed(3));
+             updatedItem.end = parseFloat((startChamberEnd + delta).toFixed(3));
           }
 
           return updatedItem;
@@ -861,6 +947,9 @@ export const useBeamlineState = (computedItems) => {
 
   const handlePointerUp = () => {
     if (draggingInfo?.type === 'component') {
+      if (!draggingInfo.hasMoved) {
+        focusItem(draggingInfo.id);
+      }
       setItems(prev => [...prev].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
     }
     setDraggingInfo(null);
@@ -932,9 +1021,19 @@ export const useBeamlineState = (computedItems) => {
               updated.distance = updated.end;
               updated.x = ORIGIN_X + updated.end * PX_PER_M;
             }
-          } else if (['start', 'end'].includes(propName)) {
+          } else if (['start', 'end', 'chamberLength', 'footprintLength'].includes(propName)) {
             const constraint = i.lockLength ? 'LOCK_LENGTH' : (i.lockCenter ? 'LOCK_CENTER' : 'ADJUST_LENGTH');
             return calculateUpdatedBounds(i, propName, val, constraint);
+          } else if (['physicalLength', 'opticLength'].includes(propName)) {
+            return calculateUpdatedBounds(i, 'physicalLength', val);
+          } else if (propName === 'freeDownstream') {
+            updated.freeDownstream = Boolean(val);
+          } else if (propName === 'showFootprint') {
+            updated.showFootprint = Boolean(val);
+          } else if (propName === 'showFootprintText') {
+            updated.showFootprintText = Boolean(val);
+          } else if (propName === 'isLocked') {
+            updated.isLocked = Boolean(val);
           } else if (propName === 'lockLength') {
             updated.lockLength = Boolean(val);
             if (val) updated.lockCenter = false;
@@ -942,7 +1041,7 @@ export const useBeamlineState = (computedItems) => {
             updated.lockCenter = Boolean(val);
             if (val) updated.lockLength = false;
           } else if (propName === 'length' && !isNaN(val) && val !== '') {
-            return calculateUpdatedBounds(i, 'length', val);
+            return calculateUpdatedBounds(i, 'physicalLength', val);
           } else if (['WALL', 'HUTCH', 'CHAMBER'].includes(i.type)) {
             const s = propName === 'start' ? Number(val) : (i.start ?? 0);
             const e = propName === 'end' ? Number(val) : (i.end ?? 0);
@@ -981,8 +1080,10 @@ export const useBeamlineState = (computedItems) => {
                 }
               }
             } else {
-              const d = propName === 'exitOffset' ? Number(val) : (i.exitOffset ?? 0.5);
-              const a = propName === 'braggAngle' ? Number(val) : (i.braggAngle ?? 20);
+              const parsedD = parseFloat(propName === 'exitOffset' ? val : i.exitOffset);
+              const d = !isNaN(parsedD) ? parsedD : 0.5;
+              const parsedA = parseFloat(propName === 'braggAngle' ? val : i.braggAngle);
+              const a = !isNaN(parsedA) ? parsedA : 20;
               const tan2theta = Math.tan(2 * a * Math.PI / 180);
               const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
               if (updated.housingLength !== undefined && !isNaN(updated.housingLength) && Number(updated.housingLength) > 0) {
@@ -992,7 +1093,7 @@ export const useBeamlineState = (computedItems) => {
               }
             }
             if (propName === 'distance' && !isNaN(val) && val !== '') {
-               updated.x = ORIGIN_X + Number(val) * PX_PER_M;
+              return calculateUpdatedBounds(updated, 'distance', val);
             }
           } else if (propName === 'distance' && !isNaN(val) && val !== '') {
             return calculateUpdatedBounds(i, 'distance', val);
@@ -1009,10 +1110,20 @@ export const useBeamlineState = (computedItems) => {
     }
   };
 
+  const handleImportCsv = (csvText) => {
+    const importedItems = parseCsvToItems(csvText);
+    if (importedItems && importedItems.length > 0) {
+      setItems(importedItems);
+      setSelectedId(null);
+      setTimeout(() => handleFitToScreen(importedItems), 60);
+      return true;
+    }
+    return false;
+  };
+
   return {
     items, setItems, selectedId, setSelectedId, draggingInfo, setDraggingInfo,
     editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos,
-    widgetPos, setWidgetPos, isDraggingWidget, setIsDraggingWidget, widgetDragRef,
     zoom, setZoom, showGrid, setShowGrid, snapToGrid, setSnapToGrid, showRuler, setShowRuler,
     showAnnotations, setShowAnnotations,
     canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView,
@@ -1021,8 +1132,9 @@ export const useBeamlineState = (computedItems) => {
     isTableOpen, setIsTableOpen, tableViewMode, setTableViewMode, isCadExportOpen, setIsCadExportOpen,
     jsonText, setJsonText, pan, setPan, sideViewRef, topViewRef, sideScrollRef, topScrollRef,
     selectedItem, sourceItem, canvasWidth, handleWheel, loadTemplate, handleClearAll,
-    handleOpenJsonModal, handleApplyJson, handleFitToScreen, handleBgPointerDown,
+    handleOpenJsonModal, handleApplyJson, handleFitToScreen, focusItem, handleBgPointerDown,
     handlePointerDown, handleResizePointerDown, handleLabelPointerDown, handlePointerMove,
-    handlePointerUp, handleLabelDoubleClick, addItem, deleteSelected, updateItemProp
+    handlePointerUp, handleLabelDoubleClick, addItem, deleteSelected, updateItemProp,
+    handleImportCsv
   };
 };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sliders, RotateCcw, Type, Eye, EyeOff, GripHorizontal } from 'lucide-react';
+import { Sliders, RotateCcw, Type, Eye, EyeOff, GripHorizontal, Box } from 'lucide-react';
 
 let globalZIndexCounter = 130;
 
@@ -89,6 +89,8 @@ export const SettingsModal = ({
   const handleResetDefaults = () => {
     setCanvasSettings({
       showLabels: true,
+      showFootprintBoxes: true,
+      showFootprintText: true,
       textSize: 10,
       annotationTextSize: 9,
       rulerTextSize: 10,
@@ -110,7 +112,23 @@ export const SettingsModal = ({
     }
   };
 
+  const handleShowAllFootprints = () => {
+    handleSettingChange('showFootprintBoxes', true);
+    if (setItems) {
+      setItems(prev => prev.map(item => ({ ...item, showFootprint: true })));
+    }
+  };
+
+  const handleHideAllFootprints = () => {
+    handleSettingChange('showFootprintBoxes', false);
+    if (setItems) {
+      setItems(prev => prev.map(item => ({ ...item, showFootprint: false })));
+    }
+  };
+
   const currentShowLabels = canvasSettings?.showLabels !== false;
+  const currentShowFootprints = canvasSettings?.showFootprintBoxes !== false;
+  const currentShowFootprintText = canvasSettings?.showFootprintText !== false;
   const currentTextSize = canvasSettings?.textSize ?? 10;
   const currentAnnotSize = canvasSettings?.annotationTextSize ?? 9;
   const currentRulerSize = canvasSettings?.rulerTextSize ?? 10;
@@ -293,6 +311,92 @@ export const SettingsModal = ({
                 Bold Component Labels
               </label>
             </div>
+          </div>
+
+          {/* Chamber Footprint Boxes Section */}
+          <div className="flex flex-col gap-3 pt-3 border-t border-dashed border-gray-400/40">
+            <div className={`p-3 border rounded-none flex items-center justify-between transition-colors ${
+              currentShowFootprints 
+                ? (isDarkMode ? 'bg-cyan-950/40 border-cyan-800' : 'bg-cyan-50/70 border-cyan-200')
+                : (isDarkMode ? 'bg-slate-900/60 border-slate-700' : 'bg-gray-100 border-gray-300')
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 border rounded-none ${
+                  currentShowFootprints 
+                    ? 'bg-cyan-600 text-white border-cyan-700' 
+                    : (isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-gray-400 border-gray-300')
+                }`}>
+                  <Box size={18} />
+                </div>
+                <div>
+                  <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.text}`}>
+                    Footprint Boxes
+                  </h3>
+                  <p className="text-[11px] opacity-70">
+                    {currentShowFootprints 
+                      ? 'Chamber envelopes visible on canvas' 
+                      : 'All footprint boxes are hidden'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Master Visibility Toggle Button */}
+              <button
+                type="button"
+                onClick={() => handleSettingChange('showFootprintBoxes', !currentShowFootprints)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border rounded-none transition-all shadow-sm ${
+                  currentShowFootprints
+                    ? 'bg-cyan-600 hover:bg-cyan-700 text-white border-cyan-700'
+                    : `${theme.buttonBg} ${theme.text} hover:border-gray-400`
+                }`}
+                title={currentShowFootprints ? 'Click to hide all footprint boxes' : 'Click to show footprint boxes'}
+              >
+                {currentShowFootprints ? (
+                  <>
+                    <Eye size={13} />
+                    <span>Visible</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff size={13} />
+                    <span>Hidden</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Quick Action Buttons: Show All / Hide All */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleShowAllFootprints}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-bold border rounded-none transition-all ${theme.buttonBg} ${theme.text} hover:border-cyan-500 hover:text-cyan-500`}
+                title="Enable footprint boxes on all components"
+              >
+                <Eye size={13} className="text-cyan-500" />
+                <span>Show On All</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleHideAllFootprints}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-bold border rounded-none transition-all ${theme.buttonBg} ${theme.text} hover:border-red-500 hover:text-red-500`}
+                title="Disable footprint boxes on all components"
+              >
+                <EyeOff size={13} className="text-red-500" />
+                <span>Hide On All</span>
+              </button>
+            </div>
+
+            {/* Show Footprint Text Toggle */}
+            <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer select-none ${theme.text}`}>
+              <input 
+                type="checkbox"
+                checked={currentShowFootprintText}
+                onChange={(e) => handleSettingChange('showFootprintText', e.target.checked)}
+                className="w-4 h-4 rounded text-cyan-600 focus:ring-0"
+              />
+              <span>Show Dimension Text <span className="font-mono text-[10px] text-cyan-500 font-bold">(L: ...m)</span> on Footprint Boxes</span>
+            </label>
           </div>
 
           {/* Annotation Distance Text Size */}

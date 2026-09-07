@@ -1,13 +1,18 @@
 import { TYPES, PX_PER_M, ORIGIN_X } from '../constants/index.js';
 
 /**
- * Calculates physical length of an item in meters.
+ * Calculates physical length of an optic in meters.
+ * For optical components, this represents the visual/physical optic length.
  */
-export const getItemLengthM = (item) => {
+export const getOpticPhysicalLengthM = (item) => {
+  if (!item) return 1.0;
   if (['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) {
     if (item.start !== undefined && item.end !== undefined) {
       return parseFloat(Math.abs(parseFloat(item.end) - parseFloat(item.start)).toFixed(3));
     }
+  }
+  if (item.physicalLength !== undefined && !isNaN(item.physicalLength)) {
+    return parseFloat(parseFloat(item.physicalLength).toFixed(3));
   }
   if (item.length !== undefined && !isNaN(item.length)) {
     return parseFloat(parseFloat(item.length).toFixed(3));
@@ -21,51 +26,103 @@ export const getItemLengthM = (item) => {
   return 1.0;
 };
 
+export const getItemLengthM = (item) => getOpticPhysicalLengthM(item);
+
 /**
  * Calculates physical start (upstream) and end (downstream) face coordinates in meters.
- * For general components: position X (distance) is the center (start = X - L/2, end = X + L/2).
- * For SOURCE: downstream face is the reference zero position (end = distance, start = end - L).
+ * Distinguishes between:
+ * - physLen: the physical length of the optic element itself
+ * - start & end: the chamber / footprint envelope boundaries
+ * - len: the chamber / footprint envelope total length (end - start)
  */
 export const getItemBoundsM = (item) => {
   const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
   const isSource = item.type === 'SOURCE';
-  const len = getItemLengthM(item);
+  const isDCM = ['VDCM', 'HDCM'].includes(item.type);
+  const physLen = getOpticPhysicalLengthM(item);
   let dist = parseFloat(item.distance) || 0;
 
   if (isSource) {
     let end = item.end !== undefined ? parseFloat(item.end) : dist;
-    let start = item.start !== undefined ? parseFloat(item.start) : parseFloat((end - len).toFixed(3));
+    let start = item.start !== undefined ? parseFloat(item.start) : parseFloat((end - physLen).toFixed(3));
+    const len = parseFloat(Math.abs(end - start).toFixed(3));
     return {
       dist: parseFloat(end.toFixed(3)),
-      len: parseFloat(len.toFixed(3)),
+      len: len > 0 ? len : physLen,
       start: parseFloat(start.toFixed(3)),
-      end: parseFloat(end.toFixed(3))
+      end: parseFloat(end.toFixed(3)),
+      physLen
     };
   }
 
-  let start = item.start !== undefined ? parseFloat(item.start) : parseFloat((dist - len / 2).toFixed(3));
-  let end = item.end !== undefined ? parseFloat(item.end) : parseFloat((dist + len / 2).toFixed(3));
+  if (isDCM) {
+    const parsedD = parseFloat(item.exitOffset);
+    const d_m = !isNaN(parsedD) ? parsedD : 0.5;
+    const parsedTh = parseFloat(item.braggAngle);
+    const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
+    const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
+    const L_m = Math.abs(tan2th) > 0.001 ? Math.abs(d_m / tan2th) : 2.0;
+    const dcmCenter_m = parseFloat((dist + L_m / 2).toFixed(3));
 
-  if (isRange && item.start !== undefined && item.end !== undefined) {
+    let start, end;
+    if (item.start !== undefined && item.end !== undefined) {
+      start = parseFloat(item.start);
+      end = parseFloat(item.end);
+    } else if (item.chamberLength !== undefined) {
+      const chLen = parseFloat(item.chamberLength);
+      start = parseFloat((dcmCenter_m - chLen / 2).toFixed(3));
+      end = parseFloat((dcmCenter_m + chLen / 2).toFixed(3));
+    } else {
+      const defaultBoxLen = parseFloat((L_m + 1.2).toFixed(3));
+      start = parseFloat((dcmCenter_m - defaultBoxLen / 2).toFixed(3));
+      end = parseFloat((dcmCenter_m + defaultBoxLen / 2).toFixed(3));
+    }
+    const boxLen = parseFloat(Math.abs(end - start).toFixed(3));
+    return {
+      dist: parseFloat(dist.toFixed(3)),
+      center: dcmCenter_m,
+      len: boxLen > 0 ? boxLen : parseFloat((L_m + 1.2).toFixed(3)),
+      start: parseFloat(Math.min(start, end).toFixed(3)),
+      end: parseFloat(Math.max(start, end).toFixed(3)),
+      physLen
+    };
+  }
+
+  // Determine start & end for footprint box / chamber:
+  let start, end;
+  if (item.start !== undefined && item.end !== undefined) {
     start = parseFloat(item.start);
     end = parseFloat(item.end);
+  } else if (item.chamberLength !== undefined) {
+    const chLen = parseFloat(item.chamberLength);
+    start = parseFloat((dist - chLen / 2).toFixed(3));
+    end = parseFloat((dist + chLen / 2).toFixed(3));
+  } else {
+    // Default footprint clearance around the optic
+    const defaultBoxLen = isRange ? physLen : Math.max(physLen, parseFloat((physLen + 0.6).toFixed(3)));
+    start = parseFloat((dist - defaultBoxLen / 2).toFixed(3));
+    end = parseFloat((dist + defaultBoxLen / 2).toFixed(3));
+  }
+
+  if (isRange && item.start !== undefined && item.end !== undefined) {
     dist = parseFloat(((start + end) / 2).toFixed(3));
   }
+
+  const boxLen = parseFloat(Math.abs(end - start).toFixed(3));
+
   return {
     dist: parseFloat(dist.toFixed(3)),
-    len: parseFloat(len.toFixed(3)),
-    start: parseFloat(start.toFixed(3)),
-    end: parseFloat(end.toFixed(3))
+    len: boxLen > 0 ? boxLen : physLen,
+    start: parseFloat(Math.min(start, end).toFixed(3)),
+    end: parseFloat(Math.max(start, end).toFixed(3)),
+    physLen
   };
 };
 
 /**
  * Calculates updated component boundaries when start, end, distance, or length is edited.
- * Supports:
- * - 'ADJUST_LENGTH' (default): editing start or end adjusts length, anchoring the opposite face.
- * - 'LOCK_LENGTH': editing start or end shifts the component along the beamline, keeping length constant.
- * - 'LOCK_CENTER': editing start or end resizes symmetrically around the locked center.
- * Exception for SOURCE: downstream face is anchored at the zero position (or edited end).
+ * Physical length of the optics is FIXED and decoupled from chamber footprint box upstream/downstream.
+ * Footprint box can be symmetric (default) or asymmetric (freely adjust downstream).
  */
 export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJUST_LENGTH') => {
   const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
@@ -74,11 +131,10 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
   const currentStart = bounds.start;
   const currentEnd = bounds.end;
   const currentDist = bounds.dist;
-  const currentLen = bounds.len;
+  const currentPhysLen = bounds.physLen;
+  const currentBoxLen = bounds.len;
 
-  const effectiveConstraint = item.lockLength 
-    ? 'LOCK_LENGTH' 
-    : (item.lockCenter ? 'LOCK_CENTER' : constraint);
+  const centerRef = bounds.center !== undefined ? bounds.center : currentDist;
 
   const val = parseFloat(rawValue);
   if (isNaN(val)) return item;
@@ -86,107 +142,101 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
   let newStart = currentStart;
   let newEnd = currentEnd;
   let newDist = currentDist;
-  let newLen = currentLen;
+  let newPhysLen = currentPhysLen;
+  let newBoxLen = currentBoxLen;
 
-  if (isSource) {
+  if (field === 'physicalLength' || field === 'opticLength') {
+    // Physical length of the optic itself changes - footprint box stays unchanged!
+    newPhysLen = Math.max(0.01, parseFloat(val.toFixed(3)));
+    if (isRange) {
+      newBoxLen = newPhysLen;
+      newStart = parseFloat((currentDist - newPhysLen / 2).toFixed(3));
+      newEnd = parseFloat((currentDist + newPhysLen / 2).toFixed(3));
+    }
+  } else if (isSource) {
     if (field === 'start') {
       newStart = parseFloat(val.toFixed(3));
-      if (effectiveConstraint === 'LOCK_LENGTH') {
-        newEnd = parseFloat((newStart + currentLen).toFixed(3));
-        newDist = newEnd;
-      } else {
-        newLen = Math.max(0.05, parseFloat((currentEnd - newStart).toFixed(3)));
-        newEnd = currentEnd;
-        newDist = newEnd;
-      }
+      newEnd = currentEnd;
+      newPhysLen = Math.max(0.05, parseFloat((newEnd - newStart).toFixed(3)));
+      newDist = newEnd;
     } else if (field === 'end') {
       newEnd = parseFloat(val.toFixed(3));
-      if (effectiveConstraint === 'LOCK_LENGTH') {
-        newStart = parseFloat((newEnd - currentLen).toFixed(3));
-        newDist = newEnd;
-      } else {
-        newLen = Math.max(0.05, parseFloat((newEnd - currentStart).toFixed(3)));
-        newStart = currentStart;
-        newDist = newEnd;
-      }
+      newStart = currentStart;
+      newPhysLen = Math.max(0.05, parseFloat((newEnd - newStart).toFixed(3)));
+      newDist = newEnd;
     } else if (field === 'distance' || field === 'dist') {
       newDist = parseFloat(val.toFixed(3));
       newEnd = newDist;
-      newStart = parseFloat((newEnd - currentLen).toFixed(3));
+      newStart = parseFloat((newEnd - currentPhysLen).toFixed(3));
     } else if (field === 'length') {
-      newLen = Math.max(0.05, parseFloat(val.toFixed(3)));
+      newPhysLen = Math.max(0.05, parseFloat(val.toFixed(3)));
       newEnd = currentEnd;
-      newStart = parseFloat((newEnd - newLen).toFixed(3));
+      newStart = parseFloat((newEnd - newPhysLen).toFixed(3));
       newDist = newEnd;
     }
+    newBoxLen = Math.abs(newEnd - newStart);
   } else if (field === 'start') {
-    if (effectiveConstraint === 'LOCK_LENGTH') {
+    // Upstream face of the footprint / chamber
+    if (constraint === 'LOCK_LENGTH' || item.lockLength) {
+      // Lock chamber length: shifting upstream face moves the entire chamber envelope
       newStart = parseFloat(val.toFixed(3));
-      newEnd = parseFloat((newStart + currentLen).toFixed(3));
-      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
-      newLen = currentLen;
-    } else if (effectiveConstraint === 'LOCK_CENTER') {
-      newStart = parseFloat(val.toFixed(3));
-      const half = Math.abs(currentDist - newStart);
-      newLen = parseFloat(Math.max(0.01, half * 2).toFixed(3));
-      newStart = parseFloat((currentDist - half).toFixed(3));
-      newEnd = parseFloat((currentDist + half).toFixed(3));
-      newDist = currentDist;
+      newEnd = parseFloat((newStart + currentBoxLen).toFixed(3));
+      if (isRange) newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || !item.freeDownstream) {
+      // Symmetric / locked center: adjust both upstream and downstream equally from center
+      const upMargin = Math.abs(centerRef - val);
+      newStart = parseFloat((centerRef - upMargin).toFixed(3));
+      newEnd = parseFloat((centerRef + upMargin).toFixed(3));
     } else {
-      // ADJUST_LENGTH (Default): anchor downstream face
+      // Asymmetric: adjust upstream face freely without changing downstream face or physical length
       newStart = parseFloat(val.toFixed(3));
-      let anchorEnd = currentEnd;
-      if (newStart >= anchorEnd) {
-        newLen = 0.05;
-        anchorEnd = parseFloat((newStart + newLen).toFixed(3));
-      } else {
-        newLen = parseFloat((anchorEnd - newStart).toFixed(3));
-      }
-      newEnd = anchorEnd;
-      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+      newEnd = currentEnd;
     }
+    newBoxLen = parseFloat(Math.abs(newEnd - newStart).toFixed(3));
   } else if (field === 'end') {
-    if (effectiveConstraint === 'LOCK_LENGTH') {
+    // Downstream face of the footprint / chamber
+    if (constraint === 'LOCK_LENGTH' || item.lockLength) {
+      // Lock chamber length: shifting downstream face moves the entire chamber envelope
       newEnd = parseFloat(val.toFixed(3));
-      newStart = parseFloat((newEnd - currentLen).toFixed(3));
-      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
-      newLen = currentLen;
-    } else if (effectiveConstraint === 'LOCK_CENTER') {
-      newEnd = parseFloat(val.toFixed(3));
-      const half = Math.abs(newEnd - currentDist);
-      newLen = parseFloat(Math.max(0.01, half * 2).toFixed(3));
-      newStart = parseFloat((currentDist - half).toFixed(3));
-      newEnd = parseFloat((currentDist + half).toFixed(3));
-      newDist = currentDist;
+      newStart = parseFloat((newEnd - currentBoxLen).toFixed(3));
+      if (isRange) newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || !item.freeDownstream) {
+      // Symmetric / locked center: adjust both downstream and upstream equally from center
+      const downMargin = Math.abs(val - centerRef);
+      newEnd = parseFloat((centerRef + downMargin).toFixed(3));
+      newStart = parseFloat((centerRef - downMargin).toFixed(3));
     } else {
-      // ADJUST_LENGTH (Default): anchor upstream face
+      // Asymmetric: adjust downstream face freely without changing upstream face or physical length
       newEnd = parseFloat(val.toFixed(3));
-      let anchorStart = currentStart;
-      if (newEnd <= anchorStart) {
-        newLen = 0.05;
-        anchorStart = parseFloat((newEnd - newLen).toFixed(3));
-      } else {
-        newLen = parseFloat((newEnd - anchorStart).toFixed(3));
-      }
-      newStart = anchorStart;
-      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+      newStart = currentStart;
     }
+    newBoxLen = parseFloat(Math.abs(newEnd - newStart).toFixed(3));
+  } else if (field === 'chamberLength' || field === 'footprintLength') {
+    // Chamber footprint length resized symmetrically around center
+    newBoxLen = Math.max(0.05, parseFloat(val.toFixed(3)));
+    newStart = parseFloat((centerRef - newBoxLen / 2).toFixed(3));
+    newEnd = parseFloat((centerRef + newBoxLen / 2).toFixed(3));
   } else if (field === 'distance' || field === 'dist') {
     newDist = parseFloat(val.toFixed(3));
-    newStart = parseFloat((newDist - currentLen / 2).toFixed(3));
-    newEnd = parseFloat((newDist + currentLen / 2).toFixed(3));
-    newLen = currentLen;
-  } else if (field === 'length') {
-    newLen = Math.max(0.01, parseFloat(val.toFixed(3)));
-    newDist = currentDist;
-    newStart = parseFloat((newDist - newLen / 2).toFixed(3));
-    newEnd = parseFloat((newDist + newLen / 2).toFixed(3));
+    const delta = newDist - currentDist;
+    newStart = parseFloat((currentStart + delta).toFixed(3));
+    newEnd = parseFloat((currentEnd + delta).toFixed(3));
+  } else if (field === 'length' || field === 'physicalLength') {
+    // For general items, 'length' maps to optics physical length
+    newPhysLen = Math.max(0.01, parseFloat(val.toFixed(3)));
+    if (isRange) {
+      newBoxLen = newPhysLen;
+      newStart = parseFloat((currentDist - newPhysLen / 2).toFixed(3));
+      newEnd = parseFloat((currentDist + newPhysLen / 2).toFixed(3));
+    }
   }
 
   const updated = {
     ...item,
     distance: isSource ? newEnd : newDist,
-    length: newLen,
+    physicalLength: newPhysLen,
+    length: newPhysLen, // keep length synched with physical length for optics
+    chamberLength: newBoxLen,
     start: newStart,
     end: newEnd,
     x: ORIGIN_X + (isSource ? newEnd : newDist) * PX_PER_M
@@ -195,14 +245,235 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
   if (isRange) {
     updated.dimX = Math.abs(newEnd - newStart) * PX_PER_M;
   } else if (isSource) {
-    updated.dimX = newLen * PX_PER_M;
+    updated.dimX = newPhysLen * PX_PER_M;
     if (item.sourceType !== 'Bending Magnet') {
       const pLen = item.periodLength || (item.sourceType === 'Wiggler' ? 100 : 50);
       updated.periodLength = pLen;
-      updated.numPeriods = Math.max(1, Math.round((newLen * 1000) / pLen));
+      updated.numPeriods = Math.max(1, Math.round((newPhysLen * 1000) / pLen));
     }
+  } else if (['VDCM', 'HDCM'].includes(item.type)) {
+    updated.dimX = item.dimX ?? TYPES[item.type]?.width ?? 42;
+    updated.showFootprint = item.showFootprint !== undefined ? Boolean(item.showFootprint) : false;
+    updated.showFootprintText = item.showFootprintText !== undefined ? Boolean(item.showFootprintText) : false;
   } else {
-    updated.showFootprint = true;
+    updated.dimX = newPhysLen * PX_PER_M;
+    updated.showFootprint = item.showFootprint !== undefined ? Boolean(item.showFootprint) : false;
+    updated.showFootprintText = item.showFootprintText !== undefined ? Boolean(item.showFootprintText) : false;
+  }
+
+  return updated;
+};
+
+/**
+ * Resolves component-specific miscellaneous parameters (Misc A, B, C, D)
+ * and label offset position tracking.
+ */
+export const getItemMiscParams = (item, activeView) => {
+  if (!item) return { miscA: '', miscB: '', miscC: '', miscD: '', labelX: 0, labelY: 0 };
+  const type = item.type;
+  let miscA = '', miscB = '', miscC = '', miscD = '';
+
+  if (['VDCM', 'HDCM'].includes(type)) {
+    miscA = item.exitOffset ?? 0.5;
+    miscB = item.braggAngle ?? 20;
+    miscC = item.crystal1Length ?? 1.0;
+    miscD = item.crystal2Length ?? 1.0;
+  } else if (type === 'GRATING') {
+    miscA = item.orientation || 'Vertical';
+    miscB = item.diffractAngle ?? 15;
+    miscC = item.tiltAngle ?? 0;
+    miscD = item.miscD ?? '';
+  } else if (['VFM', 'HFM'].includes(type)) {
+    miscA = item.physicalDistance ?? item.mirrorLength ?? item.physicalLength ?? 1.0;
+    miscB = item.grazingAngle ?? item.deflectAngle ?? 0;
+    miscC = item.focalLength ?? '';
+    miscD = item.miscD ?? '';
+  } else if (type === 'SOURCE') {
+    miscA = item.sourceType || 'Undulator';
+    miscB = item.periodLength ?? 50;
+    miscC = item.numPeriods ?? 40;
+    miscD = item.rayStyle || 'dashed';
+  } else if (type === 'DETECTOR') {
+    miscA = item.detectorType || 'Silicon Detector';
+    miscB = (item.passLight === true) ? 'YES' : 'NO';
+    miscC = item.stayInPath !== false ? 'YES' : 'NO';
+    miscD = item.miscD ?? '';
+  } else if (type === 'SAMPLE') {
+    miscA = item.passLight !== false ? 'YES' : 'NO';
+    miscB = item.miscB ?? '';
+    miscC = item.miscC ?? '';
+    miscD = item.miscD ?? '';
+  } else {
+    miscA = item.miscA ?? '';
+    miscB = item.miscB ?? '';
+    miscC = item.miscC ?? '';
+    miscD = item.miscD ?? '';
+  }
+
+  const viewKey = (activeView === 'TOP' || activeView === 'SIDE') ? activeView : null;
+  const labelX = viewKey 
+    ? (item.labelOffsets?.[viewKey]?.x ?? item.labelOffsets?.SIDE?.x ?? item.labelOffsets?.TOP?.x ?? item.labelOffsetX ?? 0)
+    : (item.labelOffsets?.SIDE?.x ?? item.labelOffsets?.TOP?.x ?? item.labelOffsetX ?? 0);
+  const labelY = viewKey 
+    ? (item.labelOffsets?.[viewKey]?.y ?? item.labelOffsets?.SIDE?.y ?? item.labelOffsets?.TOP?.y ?? item.labelOffsetY ?? 0)
+    : (item.labelOffsets?.SIDE?.y ?? item.labelOffsets?.TOP?.y ?? item.labelOffsetY ?? 0);
+
+  return { 
+    miscA, 
+    miscB, 
+    miscC, 
+    miscD, 
+    labelX: typeof labelX === 'number' ? parseFloat(labelX.toFixed(1)) : (parseFloat(labelX) || 0), 
+    labelY: typeof labelY === 'number' ? parseFloat(labelY.toFixed(1)) : (parseFloat(labelY) || 0)
+  };
+};
+
+/**
+ * Returns human-readable labels for Misc A, B, C, D per component type.
+ */
+export const getMiscParamLabels = (type) => {
+  if (['VDCM', 'HDCM'].includes(type)) {
+    return {
+      miscA: 'Exit Offset (m)',
+      miscB: 'Bragg Angle (°)',
+      miscC: 'Cryst 1 Len (m)',
+      miscD: 'Cryst 2 Len (m)'
+    };
+  }
+  if (type === 'GRATING') {
+    return {
+      miscA: 'Dispersion Plane',
+      miscB: 'Deflect Beam (°)',
+      miscC: 'Tilt Offset (°)',
+      miscD: 'Misc D'
+    };
+  }
+  if (['VFM', 'HFM'].includes(type)) {
+    return {
+      miscA: 'Mirror Dist/Len (m)',
+      miscB: 'Grazing/Deflect (°)',
+      miscC: 'Focal Len (m)',
+      miscD: 'Misc D'
+    };
+  }
+  if (type === 'SOURCE') {
+    return {
+      miscA: 'Source Type',
+      miscB: 'Period (mm)',
+      miscC: 'Num Periods',
+      miscD: 'Ray Style'
+    };
+  }
+  if (type === 'DETECTOR') {
+    return {
+      miscA: 'Detector Type',
+      miscB: 'Pass Light',
+      miscC: 'Stay In Path',
+      miscD: 'Misc D'
+    };
+  }
+  if (type === 'SAMPLE') {
+    return {
+      miscA: 'Pass Light',
+      miscB: 'Misc B',
+      miscC: 'Misc C',
+      miscD: 'Misc D'
+    };
+  }
+  return {
+    miscA: 'Misc A',
+    miscB: 'Misc B',
+    miscC: 'Misc C',
+    miscD: 'Misc D'
+  };
+};
+
+/**
+ * Applies a miscellaneous parameter update to an item.
+ */
+export const setItemMiscParam = (item, key, val, activeView) => {
+  const type = item.type;
+  const updated = { ...item };
+
+  if (key === 'miscA') {
+    if (['VDCM', 'HDCM'].includes(type)) {
+      const num = parseFloat(val);
+      updated.exitOffset = isNaN(num) ? (val === '' ? '' : 0.5) : num;
+      const d = isNaN(num) ? 0.5 : num;
+      const parsedA = parseFloat(updated.braggAngle);
+      const a = !isNaN(parsedA) ? parsedA : 20;
+      const tan2theta = Math.tan(2 * a * Math.PI / 180);
+      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+      updated.dimX = L + 80;
+    }
+    else if (type === 'GRATING') updated.orientation = val;
+    else if (['VFM', 'HFM'].includes(type)) {
+      const num = parseFloat(val) || 0;
+      updated.physicalDistance = num;
+      updated.mirrorLength = num;
+      if (num > 0) updated.physicalLength = num;
+    }
+    else if (type === 'SOURCE') updated.sourceType = val;
+    else if (type === 'DETECTOR') updated.detectorType = val;
+    else if (type === 'SAMPLE') updated.passLight = ['yes', 'true', '1'].includes(String(val).toLowerCase());
+    else updated.miscA = val;
+  } else if (key === 'miscB') {
+    if (['VDCM', 'HDCM'].includes(type)) {
+      const num = parseFloat(val);
+      updated.braggAngle = isNaN(num) ? (val === '' ? '' : 20) : num;
+      const a = isNaN(num) ? 20 : num;
+      const parsedD = parseFloat(updated.exitOffset);
+      const d = !isNaN(parsedD) ? parsedD : 0.5;
+      const tan2theta = Math.tan(2 * a * Math.PI / 180);
+      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+      updated.dimX = L + 80;
+    }
+    else if (type === 'GRATING') updated.diffractAngle = parseFloat(val) || 0;
+    else if (['VFM', 'HFM'].includes(type)) {
+      const num = parseFloat(val) || 0;
+      updated.grazingAngle = num;
+      updated.deflectAngle = num;
+    }
+    else if (type === 'SOURCE') updated.periodLength = parseFloat(val) || 0;
+    else if (type === 'DETECTOR') updated.passLight = ['yes', 'true', '1'].includes(String(val).toLowerCase());
+    else updated.miscB = val;
+  } else if (key === 'miscC') {
+    if (['VDCM', 'HDCM'].includes(type)) updated.crystal1Length = parseFloat(val) || 0;
+    else if (type === 'GRATING') updated.tiltAngle = parseFloat(val) || 0;
+    else if (['VFM', 'HFM'].includes(type)) updated.focalLength = parseFloat(val) || 0;
+    else if (type === 'SOURCE') updated.numPeriods = parseInt(val) || 0;
+    else if (type === 'DETECTOR') updated.stayInPath = ['yes', 'true', '1'].includes(String(val).toLowerCase());
+    else updated.miscC = val;
+  } else if (key === 'miscD') {
+    if (['VDCM', 'HDCM'].includes(type)) updated.crystal2Length = parseFloat(val) || 0;
+    else if (type === 'SOURCE') updated.rayStyle = val;
+    else updated.miscD = val;
+  } else if (key === 'labelX' || key === 'labelOffsetX') {
+    const num = parseFloat(val) || 0;
+    const targetView = (activeView === 'TOP' || activeView === 'SIDE') ? activeView : null;
+    updated.labelOffsetX = num;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      ...(targetView
+        ? { [targetView]: { ...(item.labelOffsets?.[targetView] || {}), x: num } }
+        : {
+            SIDE: { ...(item.labelOffsets?.SIDE || {}), x: num },
+            TOP: { ...(item.labelOffsets?.TOP || {}), x: num }
+          })
+    };
+  } else if (key === 'labelY' || key === 'labelOffsetY') {
+    const num = parseFloat(val) || 0;
+    const targetView = (activeView === 'TOP' || activeView === 'SIDE') ? activeView : null;
+    updated.labelOffsetY = num;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      ...(targetView
+        ? { [targetView]: { ...(item.labelOffsets?.[targetView] || {}), y: num } }
+        : {
+            SIDE: { ...(item.labelOffsets?.SIDE || {}), y: num },
+            TOP: { ...(item.labelOffsets?.TOP || {}), y: num }
+          })
+    };
   }
 
   return updated;
@@ -254,6 +525,9 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
       nextItemName = 'End of Beamline';
     }
 
+    const misc = getItemMiscParams(item);
+    const miscLabels = getMiscParamLabels(item.type);
+
     return {
       index: idx + 1,
       id: item.id,
@@ -264,11 +538,18 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
       isOptical,
       isEnclosure: !isOptical,
       dist: bounds.dist,
-      length: bounds.len,
+      length: bounds.len,               // chamber footprint box length
+      physLength: bounds.physLen,       // optics physical length
       start: bounds.start,
       end: bounds.end,
+      freeDownstream: Boolean(item.freeDownstream),
+      showFootprint: Boolean(item.showFootprint),
+      showFootprintText: Boolean(item.showFootprintText),
+      isLocked: Boolean(item.isLocked),
       height: item.height !== undefined ? parseFloat(item.height) : 0,
       offset: item.offset !== undefined ? parseFloat(item.offset) : 0,
+      misc,
+      miscLabels,
       enclosureName,
       gapToNext,
       nextItemName,
@@ -324,13 +605,24 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     'Component Name',
     'Type',
     'Center Position X (m)',
-    'Physical Length (m)',
+    'Optics Physical Length (m)',
+    'Chamber Footprint Length (m)',
     'Upstream Face X_start (m)',
     'Downstream Face X_end (m)',
+    'Asymmetric Chamber',
+    'Show Footprint Box',
+    'Show Footprint Text',
+    'Locked',
     'Clearance to Next (m)',
     'Next Component',
     'Elevation Y (m)',
     'Lateral Offset Z (m)',
+    'Misc A',
+    'Misc B',
+    'Misc C',
+    'Misc D',
+    'Label Offset X (px)',
+    'Label Offset Y (px)',
     'Enclosure / Section',
     'Status'
   ];
@@ -347,18 +639,31 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     if (r.isOverlap) status = `WARNING: OVERLAP (${r.overlapAmount} m)`;
     else if (r.gapToNext !== null && r.gapToNext === 0) status = 'ABUTTING (0 m)';
 
+    const misc = r.misc || getItemMiscParams(r.item);
+
     const row = [
       r.index,
       `"${(r.name || '').replace(/"/g, '""')}"`,
       r.type,
       r.dist.toFixed(3),
+      (r.physLength ?? r.length).toFixed(3),
       r.length.toFixed(3),
       r.start.toFixed(3),
       r.end.toFixed(3),
+      r.freeDownstream ? 'YES' : 'NO',
+      r.showFootprint ? 'YES' : 'NO',
+      r.showFootprintText ? 'YES' : 'NO',
+      r.isLocked ? 'YES' : 'NO',
       r.gapToNext !== null ? r.gapToNext.toFixed(3) : 'N/A',
       `"${(r.nextItemName || '').replace(/"/g, '""')}"`,
       r.height.toFixed(3),
       r.offset.toFixed(3),
+      `"${String(misc.miscA ?? '').replace(/"/g, '""')}"`,
+      `"${String(misc.miscB ?? '').replace(/"/g, '""')}"`,
+      `"${String(misc.miscC ?? '').replace(/"/g, '""')}"`,
+      `"${String(misc.miscD ?? '').replace(/"/g, '""')}"`,
+      typeof misc.labelX === 'number' ? misc.labelX.toFixed(1) : (parseFloat(misc.labelX) || 0).toFixed(1),
+      typeof misc.labelY === 'number' ? misc.labelY.toFixed(1) : (parseFloat(misc.labelY) || 0).toFixed(1),
       `"${(r.enclosureName || '').replace(/"/g, '""')}"`,
       `"${status}"`
     ];
@@ -366,6 +671,181 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
   });
 
   return lines.join('\n');
+};
+
+/**
+ * Parses CSV text to construct beamline layout items.
+ */
+export const parseCsvToItems = (csvText) => {
+  if (!csvText || typeof csvText !== 'string') return [];
+  const rawLines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  
+  let headerIndex = -1;
+  for (let i = 0; i < rawLines.length; i++) {
+    if (!rawLines[i].startsWith('#')) {
+      headerIndex = i;
+      break;
+    }
+  }
+  if (headerIndex === -1) return [];
+
+  const parseCsvRow = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseCsvRow(rawLines[headerIndex]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  const getCol = (...aliases) => {
+    for (const a of aliases) {
+      const clean = a.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const idx = headers.indexOf(clean);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  const nameIdx = getCol('componentname', 'name');
+  const typeIdx = getCol('type');
+  const posXIdx = getCol('centerpositionxm', 'centerpositionx', 'distance', 'centerx', 'positionx');
+  const physLenIdx = getCol('opticsphysicallengthm', 'physicallengthm', 'physicallength', 'opticlength');
+  const boxLenIdx = getCol('chamberfootprintlengthm', 'chamberlengthm', 'footprintlengthm', 'footprintlength', 'length');
+  const startIdx = getCol('upstreamfacexstartm', 'upstreamfacexstart', 'xstart', 'upstream', 'start');
+  const endIdx = getCol('downstreamfacexendm', 'downstreamfacexend', 'xend', 'downstream', 'end');
+  const asymIdx = getCol('asymmetricchamber', 'asymmetric', 'freedownstream');
+  const showFootprintIdx = getCol('showfootprintbox', 'showfootprint', 'footprint');
+  const showFootprintTextIdx = getCol('showfootprinttext', 'footprinttext');
+  const lockedIdx = getCol('locked', 'islocked');
+  const elevYIdx = getCol('elevationym', 'elevationy', 'height', 'y');
+  const latZIdx = getCol('lateraloffsetzm', 'lateraloffsetz', 'offset', 'z');
+  const miscAIdx = getCol('misca');
+  const miscBIdx = getCol('miscb');
+  const miscCIdx = getCol('miscc');
+  const miscDIdx = getCol('miscd');
+  const labelXIdx = getCol('labeloffsetxpx', 'labeloffsetx', 'labelx');
+  const labelYIdx = getCol('labeloffsetypx', 'labeloffsety', 'labely');
+
+  const items = [];
+  const now = Date.now();
+
+  for (let i = headerIndex + 1; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (line.startsWith('#')) continue;
+    const cols = parseCsvRow(line);
+    if (cols.length < 3) continue;
+
+    const rawType = (typeIdx !== -1 && cols[typeIdx]) ? cols[typeIdx].toUpperCase() : '';
+    const compType = Object.keys(TYPES).find(t => t === rawType) || 'SLIT';
+    const conf = TYPES[compType] || { defaultLength: 1.0, width: 20 };
+
+    const name = (nameIdx !== -1 && cols[nameIdx]) ? cols[nameIdx] : conf.name;
+    const dist = posXIdx !== -1 && !isNaN(parseFloat(cols[posXIdx])) ? parseFloat(cols[posXIdx]) : 0;
+    
+    let physLen = conf.defaultLength || 1.0;
+    if (physLenIdx !== -1 && !isNaN(parseFloat(cols[physLenIdx]))) {
+      physLen = Math.max(0.01, parseFloat(cols[physLenIdx]));
+    } else if (boxLenIdx !== -1 && !isNaN(parseFloat(cols[boxLenIdx]))) {
+      physLen = Math.max(0.01, parseFloat(cols[boxLenIdx]));
+    }
+
+    let startVal, endVal;
+    if (startIdx !== -1 && !isNaN(parseFloat(cols[startIdx]))) {
+      startVal = parseFloat(cols[startIdx]);
+    }
+    if (endIdx !== -1 && !isNaN(parseFloat(cols[endIdx]))) {
+      endVal = parseFloat(cols[endIdx]);
+    }
+
+    if (startVal === undefined || endVal === undefined) {
+      const boxLen = (boxLenIdx !== -1 && !isNaN(parseFloat(cols[boxLenIdx])))
+        ? parseFloat(cols[boxLenIdx])
+        : Math.max(physLen, physLen + 0.6);
+      startVal = parseFloat((dist - boxLen / 2).toFixed(3));
+      endVal = parseFloat((dist + boxLen / 2).toFixed(3));
+    }
+
+    const freeDownstream = asymIdx !== -1 ? ['yes', 'true', '1'].includes(cols[asymIdx]?.toLowerCase()) : false;
+    const showFootprint = showFootprintIdx !== -1 ? ['yes', 'true', '1'].includes(cols[showFootprintIdx]?.toLowerCase()) : false;
+    const showFootprintText = showFootprintTextIdx !== -1 ? ['yes', 'true', '1'].includes(cols[showFootprintTextIdx]?.toLowerCase()) : false;
+    const isLocked = lockedIdx !== -1 ? ['yes', 'true', '1'].includes(cols[lockedIdx]?.toLowerCase()) : false;
+    const height = elevYIdx !== -1 && !isNaN(parseFloat(cols[elevYIdx])) ? parseFloat(cols[elevYIdx]) : 0;
+    const offset = latZIdx !== -1 && !isNaN(parseFloat(cols[latZIdx])) ? parseFloat(cols[latZIdx]) : 0;
+
+    const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(compType);
+    let item = {
+      id: `imported_${now}_${i}`,
+      type: compType,
+      customName: name,
+      distance: dist,
+      physicalLength: physLen,
+      length: physLen,
+      chamberLength: parseFloat(Math.abs(endVal - startVal).toFixed(3)),
+      start: startVal,
+      end: endVal,
+      freeDownstream,
+      showFootprint,
+      showFootprintText,
+      isLocked,
+      height,
+      offset,
+      dimX: isRange ? Math.abs(endVal - startVal) * PX_PER_M : physLen * PX_PER_M,
+      x: ORIGIN_X + dist * PX_PER_M,
+      y: 150 - height * PX_PER_M,
+      z: 150 + offset * PX_PER_M
+    };
+
+    if (miscAIdx !== -1 && cols[miscAIdx] !== undefined && cols[miscAIdx] !== '') {
+      item = setItemMiscParam(item, 'miscA', cols[miscAIdx]);
+    }
+    if (miscBIdx !== -1 && cols[miscBIdx] !== undefined && cols[miscBIdx] !== '') {
+      item = setItemMiscParam(item, 'miscB', cols[miscBIdx]);
+    }
+    if (miscCIdx !== -1 && cols[miscCIdx] !== undefined && cols[miscCIdx] !== '') {
+      item = setItemMiscParam(item, 'miscC', cols[miscCIdx]);
+    }
+    if (miscDIdx !== -1 && cols[miscDIdx] !== undefined && cols[miscDIdx] !== '') {
+      item = setItemMiscParam(item, 'miscD', cols[miscDIdx]);
+    }
+    if (labelXIdx !== -1 && cols[labelXIdx] !== undefined && cols[labelXIdx] !== '') {
+      item = setItemMiscParam(item, 'labelX', cols[labelXIdx]);
+    }
+    if (labelYIdx !== -1 && cols[labelYIdx] !== undefined && cols[labelYIdx] !== '') {
+      item = setItemMiscParam(item, 'labelY', cols[labelYIdx]);
+    }
+
+    if (['VDCM', 'HDCM'].includes(compType)) {
+      const parsedD = parseFloat(item.exitOffset);
+      const d = !isNaN(parsedD) ? parsedD : 0.5;
+      const parsedA = parseFloat(item.braggAngle);
+      const a = !isNaN(parsedA) ? parsedA : 20;
+      const tan2theta = Math.tan(2 * a * Math.PI / 180);
+      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+      item.dimX = L + 80;
+    }
+
+    items.push(item);
+  }
+
+  return items;
 };
 
 /**

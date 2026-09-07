@@ -4,19 +4,19 @@ export const templates = templatesData;
 
 export const TYPES = {
   SOURCE: { id: 'SOURCE', name: 'Source', width: 40, height: 24, defaultLength: 2 },
-  SLIT: { id: 'SLIT', name: 'Slit', width: 6, height: 20 },
-  FILTER: { id: 'FILTER', name: 'Filter', width: 12, height: 20 },
+  SLIT: { id: 'SLIT', name: 'Slit', width: 6, height: 20, defaultLength: 0.3 },
+  FILTER: { id: 'FILTER', name: 'Filter', width: 12, height: 20, defaultLength: 0.4 },
   GRATING: { id: 'GRATING', name: 'Grating', width: 20, height: 8, defaultLength: 1 },
-  WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140 },
+  WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140, defaultLength: 1.2 },
   XBPM: { id: 'XBPM', name: 'XBPM', width: 8.5, height: 8.5, defaultLength: 0.425 },
-  CHAMBER: { id: 'CHAMBER', name: 'Floating Chamber', width: 80, height: 60 },
-  HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140 },
-  VDCM: { id: 'VDCM', name: 'VDCM', width: 160, height: 60, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
-  HDCM: { id: 'HDCM', name: 'HDCM', width: 160, height: 60, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
+  CHAMBER: { id: 'CHAMBER', name: 'Floating Chamber', width: 80, height: 60, defaultLength: 4 },
+  HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140, defaultLength: 17 },
+  VDCM: { id: 'VDCM', name: 'VDCM', width: 160, height: 60, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
+  HDCM: { id: 'HDCM', name: 'HDCM', width: 160, height: 60, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
   VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2 },
   HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 12, height: 12, defaultLength: 0.6 },
-  SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 20 },
+  SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 20, defaultLength: 0.6 },
   DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 21, height: 28, defaultLength: 1.05 }
 };
 

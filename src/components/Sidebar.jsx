@@ -1,9 +1,10 @@
-import React from 'react';
-import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson, Tag, Sliders, Type, Table, Sparkles, FileDown } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson, Tag, Sliders, Type, Table, Sparkles, FileDown, FileUp, ChevronLeft } from 'lucide-react';
 import { TYPES, templates } from '../constants';
 
 export const Sidebar = ({ 
   showUI, 
+  setShowUI,
   theme, 
   loadTemplate, 
   handleFitToScreen, 
@@ -30,13 +31,40 @@ export const Sidebar = ({
   setIsTableOpen,
   setIsCadExportOpen,
   items = [],
-  onExportCsv
+  onExportCsv,
+  onImportCsv
 }) => {
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (text && onImportCsv) {
+        onImportCsv(text);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
   return (
     <div className={`${showUI ? 'w-72 border-r' : 'w-0 overflow-hidden'} flex flex-col z-30 transition-all duration-300 ${theme.panelBg} ${theme.panelBorder} shadow-xl`}>
-      <div className="p-4 bg-blue-600 text-white flex items-center gap-2">
-        <Settings2 size={20} />
-        <h1 className="font-bold text-lg tracking-wide whitespace-nowrap">Beamline Builder</h1>
+      <div className="p-4 bg-blue-600 text-white flex items-center justify-between">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <Settings2 size={20} className="shrink-0" />
+          <h1 className="font-bold text-lg tracking-wide whitespace-nowrap">Beamline Builder</h1>
+        </div>
+        {setShowUI && (
+          <button 
+            onClick={() => setShowUI(false)}
+            title="Hide Left Sidebar"
+            className="p-1 text-white/80 hover:text-white hover:bg-blue-700 rounded transition-colors"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
       </div>
       
       <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
@@ -57,7 +85,7 @@ export const Sidebar = ({
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-1">
-              <button onClick={handleFitToScreen} className={`flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text}`}>
+              <button onClick={() => handleFitToScreen()} className={`flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text}`}>
                 <Maximize size={14} /> Fit to Screen
               </button>
               <button onClick={handleOpenJsonModal} className={`flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text}`}>
@@ -82,13 +110,29 @@ export const Sidebar = ({
                 <Sparkles size={14} className="text-blue-500" /> CAD (SVG)
               </button>
             </div>
-            <button 
-              onClick={() => onExportCsv && onExportCsv()} 
-              className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500 mt-1`}
-              title="Download construction schedule spreadsheet (.csv) for Excel"
-            >
-              <FileDown size={14} className="text-emerald-500" /> Export Table to CSV
-            </button>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <button 
+                onClick={() => onExportCsv && onExportCsv()} 
+                className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500`}
+                title="Download construction schedule spreadsheet (.csv) for Excel"
+              >
+                <FileDown size={14} className="text-emerald-500" /> Export CSV
+              </button>
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500`}
+                title="Import layout and components from CSV spreadsheet"
+              >
+                <FileUp size={14} className="text-emerald-500" /> Import CSV
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                accept=".csv,text/csv" 
+                className="hidden" 
+                onChange={handleFileChange} 
+              />
+            </div>
             <button 
               onClick={() => setIsSettingsModalOpen(true)} 
               className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text}`}
@@ -160,7 +204,7 @@ export const Sidebar = ({
 
         <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${theme.text}`}>Add Construction</p>
         <div className="flex flex-col gap-2 mb-6">
-          {['WALL', 'CHAMBER', 'HUTCH'].map((key) => {
+          {['WALL', 'HUTCH'].map((key) => {
             const type = TYPES[key];
             return (
               <button key={type.id} onClick={() => addItem(type.id)} className={`flex items-center gap-3 p-3 border rounded-none transition-all text-left group ${placingType === type.id ? 'bg-blue-50 border-blue-400' : theme.buttonBg}`}>

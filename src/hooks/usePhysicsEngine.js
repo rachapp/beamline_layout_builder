@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TYPES, ORIGIN_X, PX_PER_M } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M } from '../constants/index.js';
 
 export const usePhysicsEngine = (items) => {
   const { computedItems, tracePointsSide, tracePointsTop } = useMemo(() => {
@@ -52,9 +52,11 @@ export const usePhysicsEngine = (items) => {
         const isGratingActive = item.type === 'GRATING' && ((plane === 'y' && (item.orientation || 'Vertical') === 'Vertical') || (plane === 'z' && item.orientation === 'Horizontal'));
 
         if (isShifter(item.type)) {
-          const D_m = item.exitOffset ?? 0.5;
+          const parsedD = parseFloat(item.exitOffset);
+          const D_m = !isNaN(parsedD) ? parsedD : 0.5;
           const D = D_m * PX_PER_M;
-          const theta_deg = item.braggAngle ?? 20;
+          const parsedTheta = parseFloat(item.braggAngle);
+          const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 20;
           const theta = theta_deg * Math.PI / 180;
           
           const tan2theta = Math.tan(2 * theta);

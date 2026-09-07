@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
-  Table, Plus, Trash2, Copy, FileDown, Maximize2, Minimize2, X, 
+  Table, Plus, Trash2, Copy, FileDown, FileUp, Maximize2, Minimize2, X, 
   AlertTriangle, CheckCircle2, Search, ArrowRight, Layers, Eye,
   Sparkles, Check, ChevronDown, ChevronUp, Sliders, Box, GripHorizontal,
   Lock, Crosshair
 } from 'lucide-react';
 import { TYPES, PX_PER_M } from '../constants';
-import { computeConstructionSchedule, downloadCsv, getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
+import { computeConstructionSchedule, downloadCsv, getItemBoundsM, calculateUpdatedBounds, setItemMiscParam } from '../utils/constructionUtils';
 
 export const TableView = ({
   items = [],
@@ -19,7 +19,10 @@ export const TableView = ({
   onClose,
   viewMode = 'split',        // 'split' (docked bottom) or 'full' (fullscreen table)
   setViewMode,
-  onOpenCadExport
+  onOpenCadExport,
+  onFocusItem,
+  onImportCsv,
+  onExportCsv
 }) => {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL', 'OPTICAL', 'ENCLOSURE'
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,7 +136,11 @@ export const TableView = ({
     setItems(prev => prev.map(item => {
       if (item.id !== itemId) return item;
 
-      if (['start', 'end', 'distance', 'length'].includes(field)) {
+      if (['miscA', 'miscB', 'miscC', 'miscD', 'labelX', 'labelY'].includes(field)) {
+        return setItemMiscParam(item, field, value);
+      }
+
+      if (['start', 'end', 'distance', 'length', 'chamberLength', 'physicalLength'].includes(field)) {
         return calculateUpdatedBounds(item, field, value, boundaryConstraint);
       }
 
@@ -217,7 +224,8 @@ export const TableView = ({
       length: len,
       dimX: isRange ? (len * PX_PER_M) : conf.width,
       showLabel: true,
-      showFootprint: true,
+      showFootprint: false,
+      showFootprintText: false,
       ...(isRange ? {
         start: parseFloat((dist - len / 2).toFixed(2)),
         end: parseFloat((dist + len / 2).toFixed(2)),
@@ -355,13 +363,39 @@ export const TableView = ({
 
           {/* Export CSV Button */}
           <button
-            onClick={() => downloadCsv(scheduleData, 'beamline_construction_schedule.csv')}
+            onClick={() => onExportCsv ? onExportCsv() : downloadCsv(scheduleData, 'beamline_construction_schedule.csv')}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-all shadow-sm"
             title="Download full CSV spreadsheet for Excel / construction team"
           >
             <FileDown size={14} />
             <span>Export Table to CSV</span>
           </button>
+
+          {/* Import CSV Button */}
+          <label
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-all shadow-sm cursor-pointer"
+            title="Import layout and components from CSV spreadsheet"
+          >
+            <FileUp size={14} />
+            <span>Import CSV</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  if (evt.target?.result && onImportCsv) {
+                    onImportCsv(evt.target.result);
+                  }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }}
+            />
+          </label>
 
           {/* View Mode Toggle: Split / Full */}
           {setViewMode && (
@@ -611,6 +645,12 @@ export const TableView = ({
               </th>
               <th className="py-2 px-3 text-right">Elevation Y (m)</th>
               <th className="py-2 px-3 text-right">Offset Z (m)</th>
+              <th className="py-2 px-2 text-center" title="Misc Parameter A (Type-specific)">Misc A</th>
+              <th className="py-2 px-2 text-center" title="Misc Parameter B (Type-specific)">Misc B</th>
+              <th className="py-2 px-2 text-center" title="Misc Parameter C (Type-specific)">Misc C</th>
+              <th className="py-2 px-2 text-center" title="Misc Parameter D (Type-specific)">Misc D</th>
+              <th className="py-2 px-2 text-right" title="Canvas Label Offset X (px)">Label X (px)</th>
+              <th className="py-2 px-2 text-right" title="Canvas Label Offset Y (px)">Label Y (px)</th>
               <th className="py-2 px-3">Enclosure / Station</th>
               <th className="py-2 px-3 text-center w-28">Actions</th>
             </tr>
@@ -618,7 +658,7 @@ export const TableView = ({
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="13" className="py-8 text-center opacity-60 font-bold">
+                <td colSpan="19" className="py-8 text-center opacity-60 font-bold">
                   No components match the current filter or search criteria.
                 </td>
               </tr>
@@ -629,7 +669,10 @@ export const TableView = ({
                 return (
                   <tr
                     key={row.id}
-                    onClick={() => setSelectedId(row.id)}
+                    onClick={() => {
+                      setSelectedId(row.id);
+                      if (onFocusItem) onFocusItem(row.id);
+                    }}
                     className={`transition-colors cursor-pointer ${
                       isSelected
                         ? (isDarkMode ? 'bg-blue-950/60 font-bold' : 'bg-blue-100/70 font-bold')
@@ -724,35 +767,39 @@ export const TableView = ({
 
                     {/* Physical Length L (m) Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1 justify-end">
-                        <input
-                          type="number"
-                          step="0.05"
-                          min="0.01"
-                          value={row.length}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => handleCellChange(row.id, 'length', e.target.value)}
-                          className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
-                            isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
-                          } ${theme.text}`}
-                          title="Physical equipment length (controls clearance gap and dashed envelope)"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCellChange(row.id, 'lockLength', !row.item.lockLength);
-                          }}
-                          className={`p-0.5 rounded transition-colors ${
-                            row.item.lockLength
-                              ? 'text-blue-500 font-bold bg-blue-500/15'
-                              : 'opacity-25 hover:opacity-100 hover:text-blue-500'
-                          }`}
-                          title={row.item.lockLength ? "Physical length locked (click to unlock)" : "Lock physical length for this item"}
-                        >
-                          <Lock size={12} />
-                        </button>
-                      </div>
+                      {!['VDCM', 'HDCM', 'SCREEN', 'SLIT', 'XBPM'].includes(row.type) ? (
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0.01"
+                            value={row.length}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => handleCellChange(row.id, 'length', e.target.value)}
+                            className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
+                              isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
+                            } ${theme.text}`}
+                            title="Physical equipment length (controls clearance gap and dashed envelope)"
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellChange(row.id, 'lockLength', !row.item.lockLength);
+                            }}
+                            className={`p-0.5 rounded transition-colors ${
+                              row.item.lockLength
+                                ? 'text-blue-500 font-bold bg-blue-500/15'
+                                : 'opacity-25 hover:opacity-100 hover:text-blue-500'
+                            }`}
+                            title={row.item.lockLength ? "Physical length locked (click to unlock)" : "Lock physical length for this item"}
+                          >
+                            <Lock size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] opacity-30 font-mono">-</span>
+                      )}
                     </td>
 
                     {/* Upstream Face X_start (m) Editable Input */}
@@ -830,6 +877,84 @@ export const TableView = ({
                       />
                     </td>
 
+                    {/* Misc A */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.misc?.miscA ?? ''}
+                        placeholder={row.miscLabels?.miscA || '-'}
+                        title={row.miscLabels?.miscA || 'Misc A'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'miscA', e.target.value)}
+                        className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Misc B */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.misc?.miscB ?? ''}
+                        placeholder={row.miscLabels?.miscB || '-'}
+                        title={row.miscLabels?.miscB || 'Misc B'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'miscB', e.target.value)}
+                        className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Misc C */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.misc?.miscC ?? ''}
+                        placeholder={row.miscLabels?.miscC || '-'}
+                        title={row.miscLabels?.miscC || 'Misc C'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'miscC', e.target.value)}
+                        className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Misc D */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.misc?.miscD ?? ''}
+                        placeholder={row.miscLabels?.miscD || '-'}
+                        title={row.miscLabels?.miscD || 'Misc D'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'miscD', e.target.value)}
+                        className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Label Offset X (px) */}
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="1"
+                        value={row.misc?.labelX ?? 0}
+                        title="Canvas Label Horizontal Offset (px)"
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'labelX', e.target.value)}
+                        className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Label Offset Y (px) */}
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="1"
+                        value={row.misc?.labelY ?? 0}
+                        title="Canvas Label Vertical Offset (px)"
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleCellChange(row.id, 'labelY', e.target.value)}
+                        className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
                     {/* Enclosure / Section */}
                     <td className="py-2 px-3 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
@@ -865,6 +990,20 @@ export const TableView = ({
                           title="Duplicate Component"
                         >
                           <Copy size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCellChange(row.id, 'isLocked', !row.item.isLocked);
+                          }}
+                          className={`p-1 border rounded transition-colors ${
+                            row.item.isLocked
+                              ? 'bg-amber-500 text-white border-amber-600'
+                              : `${theme.buttonBg} ${theme.text} hover:text-amber-500`
+                          }`}
+                          title={row.item.isLocked ? "Component locked (cannot be moved accidentally) - click to unlock" : "Lock component figure to prevent accidental movement"}
+                        >
+                          <Lock size={12} />
                         </button>
                         <button
                           onClick={(e) => {
