@@ -151,20 +151,37 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
   }  
   if (type === 'XBPM') {
     return (
-      <div className="w-full h-full grid grid-cols-2 grid-rows-2 relative shadow-sm rounded-none" style={{ backgroundColor: theme.compBg, border: `1px solid ${primary}` }}>
-        <div className="border-r border-b" style={{ borderColor: primary }}></div>
-        <div className="border-b" style={{ borderColor: primary }}></div>
-        <div className="border-r" style={{ borderColor: primary }}></div>
-        <div></div>
-        <div className="absolute top-1/2 left-1/2 w-[5.66px] h-[5.66px] rounded-full transform -translate-x-1/2 -translate-y-1/2" style={{ backgroundColor: secondary, boxShadow: `0 0 3px ${secondary}`}}></div>
-      </div>
+      <svg 
+        width="100%" 
+        height="100%" 
+        viewBox="0 0 20 20" 
+        className="block shadow-sm"
+        style={{ overflow: 'visible' }}
+      >
+        {/* Outer square box */}
+        <rect 
+          x="0.5" 
+          y="0.5" 
+          width="19" 
+          height="19" 
+          fill={theme.compBg} 
+          stroke={primary} 
+          strokeWidth="1" 
+        />
+        {/* Dead-center quadrant crosshair lines */}
+        <line x1="10" y1="0" x2="10" y2="20" stroke={primary} strokeWidth="1" />
+        <line x1="0" y1="10" x2="20" y2="10" stroke={primary} strokeWidth="1" />
+        {/* Dead-center beam spot with glow */}
+        <circle cx="10" cy="10" r="3.5" fill={secondary} opacity="0.3" />
+        <circle cx="10" cy="10" r="2" fill={secondary} />
+      </svg>
     );
   }
   
   if (type === 'SCREEN') {
     return (
-      <div className="w-full h-full shadow-[0_0_8px_rgba(34,197,94,0.5)] flex justify-center items-center rounded-none border" style={{ backgroundColor: theme.compBg, borderColor: primary, boxShadow: `0 0 8px ${primary}88` }}>
-        <div className="w-[2px] h-full" style={{ backgroundColor: secondary }}></div>
+      <div className="w-full h-full flex justify-center items-center shadow-sm relative">
+         <div className="w-[4px] h-full opacity-80" style={{ backgroundColor: primary, border: `1px solid ${secondary}` }} />
       </div>
     );
   }
@@ -179,8 +196,20 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
       );
     }
 
-    let c1Config = { left: 40, top: 30, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
-    let c2Config = { left: 80, top: 30, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
+    const conf = TYPES[type];
+    const housingH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
+    const centerY = housingH / 2;
+    const itemW = item.dimX ?? conf.width;
+
+    const offset = item.exitOffset ?? 0.5;
+    const theta_deg = item.braggAngle ?? 20;
+    const theta_rad = theta_deg * Math.PI / 180;
+    const tan2theta = Math.tan(2 * theta_rad);
+    const L = Math.abs(tan2theta) > 0.001 ? Math.abs((offset * 20) / tan2theta) : 40;
+    const localAnchorX = Math.max(10, (itemW - L) / 2);
+
+    let c1Config = { left: localAnchorX, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
+    let c2Config = { left: localAnchorX + L, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
 
     if (tracePoints) {
       const idx1 = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 1);
@@ -189,15 +218,11 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
       if (idx1 !== -1 && idx2 !== -1) {
          const p1 = tracePoints[idx1];
          const p2 = tracePoints[idx2];
-         const offset = item.exitOffset ?? 0.5;
-         const theta_deg = item.braggAngle ?? 20;
-         const theta_rad = theta_deg * Math.PI / 180;
 
-         const localAnchorX = 40; 
          c1Config.left = localAnchorX + (p1.x - item.x);
-         c1Config.top = 30 + (p1[planeCoord] - item[planeCoord]);
+         c1Config.top = centerY + (p1[planeCoord] - item[planeCoord]);
          c2Config.left = localAnchorX + (p2.x - item.x);
-         c2Config.top = 30 + (p2[planeCoord] - item[planeCoord]);
+         c2Config.top = centerY + (p2[planeCoord] - item[planeCoord]);
 
          const c1IsLower = offset > 0;
          
@@ -232,11 +257,11 @@ export const OpticalComponent = ({ item, viewType, tracePoints, theme, isDarkMod
     return (
       <div className="w-full h-full relative rounded-none" style={{ border: `1px dashed ${theme.inactiveBorder}` }}>
         <div className={`absolute flex flex-col shadow-sm rounded-none ${c1Config.justify}`}
-             style={{ width: `${c1Len}px`, height: '10px', left: `${c1Config.left}px`, top: `${c1Config.top}px`, transformOrigin: c1Config.origin, transform: `${c1Config.translate} rotate(${c1Config.rot}rad)`, ...crystalStyle}}>
+             style={{ width: `${c1Len}px`, height: '5px', left: `${c1Config.left}px`, top: `${c1Config.top}px`, transformOrigin: c1Config.origin, transform: `${c1Config.translate} rotate(${c1Config.rot}rad)`, ...crystalStyle}}>
           <div className="w-full h-1/2 opacity-50" style={hatchStyle} />
         </div>
         <div className={`absolute flex flex-col shadow-sm rounded-none ${c2Config.justify}`}
-             style={{ width: `${c2Len}px`, height: '10px', left: `${c2Config.left}px`, top: `${c2Config.top}px`, transformOrigin: c2Config.origin, transform: `${c2Config.translate} rotate(${c2Config.rot}rad)`, ...crystalStyle}}>
+             style={{ width: `${c2Len}px`, height: '5px', left: `${c2Config.left}px`, top: `${c2Config.top}px`, transformOrigin: c2Config.origin, transform: `${c2Config.translate} rotate(${c2Config.rot}rad)`, ...crystalStyle}}>
           <div className="w-full h-1/2 opacity-50" style={hatchStyle} />
         </div>
       </div>

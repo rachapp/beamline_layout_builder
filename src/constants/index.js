@@ -1,4 +1,4 @@
-import templatesData from '../../templates.json';
+import templatesData from '../../templates.json' with { type: 'json' };
 
 export const templates = templatesData;
 
@@ -8,7 +8,7 @@ export const TYPES = {
   FILTER: { id: 'FILTER', name: 'Filter', width: 12, height: 20 },
   GRATING: { id: 'GRATING', name: 'Grating', width: 20, height: 8, defaultLength: 1 },
   WALL: { id: 'WALL', name: 'Wall', width: 24, height: 140 },
-  XBPM: { id: 'XBPM', name: 'XBPM', width: 17, height: 17, defaultLength: 0.85 },
+  XBPM: { id: 'XBPM', name: 'XBPM', width: 8.5, height: 8.5, defaultLength: 0.425 },
   CHAMBER: { id: 'CHAMBER', name: 'Floating Chamber', width: 80, height: 60 },
   HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140 },
   VDCM: { id: 'VDCM', name: 'VDCM', width: 160, height: 60, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
@@ -16,7 +16,7 @@ export const TYPES = {
   VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2 },
   HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 12, height: 12, defaultLength: 0.6 },
-  SCREEN: { id: 'SCREEN', name: 'Screen', width: 6, height: 20 },
+  SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 20 },
   DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 21, height: 28, defaultLength: 1.05 }
 };
 

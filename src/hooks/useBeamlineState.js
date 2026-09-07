@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
 import { mapTemplateToItems } from '../utils';
+import { calculateUpdatedBounds, getItemBoundsM } from '../utils/constructionUtils';
 
 export const useBeamlineState = (computedItems) => {
   const [items, setItems] = useState(() => mapTemplateToItems(templates["Single Branch"]));
@@ -27,6 +28,53 @@ export const useBeamlineState = (computedItems) => {
 
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [jsonText, setJsonText] = useState("");
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isTableOpen, setIsTableOpen] = useState(false);
+  const [tableViewMode, setTableViewMode] = useState('split');
+  const [isCadExportOpen, setIsCadExportOpen] = useState(false);
+  const [canvasSettings, setCanvasSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('beamline_canvas_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          showLabels: parsed.showLabels !== undefined ? parsed.showLabels : true,
+          textSize: parsed.textSize ?? 10,
+          annotationTextSize: parsed.annotationTextSize ?? 9,
+          rulerTextSize: parsed.rulerTextSize ?? 10,
+          labelBold: parsed.labelBold ?? false,
+        };
+      }
+    } catch (e) {}
+    return {
+      showLabels: true,
+      textSize: 10,
+      annotationTextSize: 9,
+      rulerTextSize: 10,
+      labelBold: false,
+    };
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('beamline_canvas_settings', JSON.stringify(canvasSettings));
+    } catch (e) {}
+  }, [canvasSettings]);
+
+  // Ensure XBPM items normalize to the new 0.425m (8.5px) default square size
+  useEffect(() => {
+    setItems(prev => {
+      let changed = false;
+      const updated = prev.map(item => {
+        if (item.type === 'XBPM' && (item.length === 0.85 || item.dimX === 17 || !item.dimX || item.dimX !== 8.5)) {
+          changed = true;
+          return { ...item, length: 0.425, dimX: 8.5, dimY: 8.5, dimZ: 8.5 };
+        }
+        return item;
+      });
+      return changed ? updated : prev;
+    });
+  }, []);
   
   const [pan, setPan] = useState({
     TOP: { x: 50, y: 100 },
@@ -37,6 +85,129 @@ export const useBeamlineState = (computedItems) => {
   const topViewRef = useRef(null);
   const sideScrollRef = useRef(null);
   const topScrollRef = useRef(null);
+
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const handleFitToScreen = (customItems = null) => {
+    const targetItems = customItems || itemsRef.current || items;
+    const viewRef = (activeView === 'SIDE' ? sideScrollRef.current : topScrollRef.current) 
+      || sideScrollRef.current 
+      || topScrollRef.current;
+    if (!viewRef) return false;
+    const containerW = viewRef.clientWidth;
+    const containerH = viewRef.clientHeight;
+    if (containerW <= 0 || containerH <= 0) return false;
+
+    let minX = Infinity, maxX = -Infinity;
+    targetItems.forEach(i => {
+      const bounds = getItemBoundsM(i);
+      const conf = TYPES[i.type] || { width: 20 };
+      const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(i.type);
+      const isSource = i.type === 'SOURCE';
+      const isDCM = i.type === 'VDCM' || i.type === 'HDCM';
+
+      // Physical footprint boundaries (in canvas px)
+      const physStartPx = ORIGIN_X + bounds.start * PX_PER_M;
+      const physEndPx = ORIGIN_X + bounds.end * PX_PER_M;
+
+      // Visual graphic boundaries (in canvas px)
+      const itemW = (isRange || isDCM || isSource) ? (i.dimX ?? conf.width) : conf.width;
+      let visStartPx, visEndPx;
+      if (isSource) {
+        visStartPx = (i.x ?? ORIGIN_X) - itemW;
+        visEndPx = (i.x ?? ORIGIN_X);
+      } else if (isRange) {
+        visStartPx = Math.min(physStartPx, physEndPx);
+        visEndPx = Math.max(physStartPx, physEndPx);
+      } else {
+        const cx = i.x ?? (ORIGIN_X + bounds.dist * PX_PER_M);
+        visStartPx = cx - itemW / 2;
+        visEndPx = cx + itemW / 2;
+      }
+
+      const itemMinX = Math.min(physStartPx, physEndPx, visStartPx, visEndPx);
+      const itemMaxX = Math.max(physStartPx, physEndPx, visStartPx, visEndPx);
+
+      if (itemMinX < minX) minX = itemMinX;
+      if (itemMaxX > maxX) maxX = itemMaxX;
+    });
+
+    if (minX === Infinity || minX >= maxX) {
+      minX = ORIGIN_X;
+      maxX = ORIGIN_X + 600;
+    }
+    // Ensure beamline reference origin (0.000m) is included in the frame
+    minX = Math.min(minX, ORIGIN_X);
+
+    const paddingX = 80;
+    const contentW = (maxX - minX) + paddingX * 2;
+    const zoomX = containerW / contentW;
+
+    // Framing vertically around the optical axis (Y = 150)
+    const contentH = 240;
+    const zoomY = Math.max(0.1, (containerH - 40) / contentH);
+
+    let newZoom = Math.min(zoomX, zoomY);
+    newZoom = Math.max(0.1, Math.min(newZoom, 2.5));
+    newZoom = parseFloat(newZoom.toFixed(3));
+
+    setZoom(newZoom);
+
+    const targetPanX = Math.round(containerW / 2 - ((minX + maxX) / 2) * newZoom);
+    const targetPanY = Math.round(containerH / 2 - 150 * newZoom);
+
+    setPan({
+      TOP: { x: targetPanX, y: targetPanY },
+      SIDE: { x: targetPanX, y: targetPanY }
+    });
+
+    return true;
+  };
+
+  // Auto Fit-to-Screen on initial load / refresh
+  const hasAutoFittedRef = useRef(false);
+
+  // Synchronous attempt right before browser paint
+  useLayoutEffect(() => {
+    if (!hasAutoFittedRef.current) {
+      const success = handleFitToScreen();
+      if (success) {
+        hasAutoFittedRef.current = true;
+      }
+    }
+  }, []);
+
+  // Asynchronous fallback attempts for when layout stabilizes shortly after mount
+  useEffect(() => {
+    if (hasAutoFittedRef.current) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    const tryAutoFit = () => {
+      if (cancelled || hasAutoFittedRef.current) return;
+      const success = handleFitToScreen();
+      if (success) {
+        hasAutoFittedRef.current = true;
+      } else if (attempts < maxAttempts) {
+        attempts++;
+        requestAnimationFrame(tryAutoFit);
+      }
+    };
+
+    const rafId = requestAnimationFrame(tryAutoFit);
+    const timerId = setTimeout(tryAutoFit, 100);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
+    };
+  }, []);
 
   const selectedItem = items.find(i => i.id === selectedId);
   const sourceItem = items.find(i => i.type === 'SOURCE') || {};
@@ -176,8 +347,10 @@ export const useBeamlineState = (computedItems) => {
   const loadTemplate = (templateName) => {
     const selectedTemplate = templates[templateName];
     if (!selectedTemplate) return;
-    setItems(mapTemplateToItems(selectedTemplate));
+    const newItems = mapTemplateToItems(selectedTemplate);
+    setItems(newItems);
     setSelectedId(null);
+    requestAnimationFrame(() => handleFitToScreen(newItems));
   };
 
   const handleClearAll = () => {
@@ -211,8 +384,11 @@ export const useBeamlineState = (computedItems) => {
         offset: item.offset ?? 0
       };
 
-      if (!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) {
-        exportItem.length = item.length ?? (TYPES[item.type].defaultLength || (item.dimX / PX_PER_M));
+      if (!['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) {
+        exportItem.length = item.length ?? (TYPES[item.type].defaultLength || (TYPES[item.type].width / PX_PER_M));
+        if (item.showFootprint !== undefined) {
+          exportItem.showFootprint = item.showFootprint;
+        }
       }
       if (isRange) {
         exportItem.start = item.start ?? 0;
@@ -223,6 +399,8 @@ export const useBeamlineState = (computedItems) => {
         exportItem.braggAngle = item.braggAngle ?? 20;
         exportItem.crystal1Length = item.crystal1Length ?? TYPES[item.type].defaultCrystal1Length;
         exportItem.crystal2Length = item.crystal2Length ?? TYPES[item.type].defaultCrystal2Length;
+        if (item.housingLength !== undefined) exportItem.housingLength = item.housingLength;
+        if (item.housingHeight !== undefined) exportItem.housingHeight = item.housingHeight;
       }
       if (isGrating) {
         exportItem.orientation = item.orientation || 'Vertical';
@@ -313,37 +491,13 @@ export const useBeamlineState = (computedItems) => {
           distance: isRange ? (start + end) / 2 : (item.distance ?? 0)
         };
       });
-      setItems(newItems.sort((a, b) => (a.distance || 0) - (b.distance || 0)));
+      const sorted = newItems.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      setItems(sorted);
       setIsJsonModalOpen(false);
+      requestAnimationFrame(() => handleFitToScreen(sorted));
     } catch (err) {
       alert("Invalid JSON format: " + err.message);
     }
-  };
-
-  const handleFitToScreen = () => {
-    const viewRef = topScrollRef.current || sideScrollRef.current;
-    if (!viewRef) return;
-    const containerW = viewRef.clientWidth;
-    const containerH = viewRef.clientHeight;
-    let minX = Infinity, maxX = -Infinity;
-    items.forEach(i => {
-      const conf = TYPES[i.type];
-      const w = i.dimX ?? conf.width;
-      if (i.x < minX) minX = i.x;
-      if (i.x + w > maxX) maxX = i.x + w;
-    });
-    if (minX === Infinity) { minX = 0; maxX = 1000; }
-    const padding = 150; 
-    const contentW = (maxX - minX) + padding * 2;
-    let newZoom = containerW / contentW;
-    newZoom = Math.max(0.1, Math.min(newZoom, 2.5));
-    setZoom(newZoom);
-    const targetPanX = containerW / 2 - ((minX + maxX) / 2) * newZoom;
-    const targetPanY = containerH / 2 - 150 * newZoom; 
-    setPan({
-      TOP: { x: targetPanX, y: targetPanY },
-      SIDE: { x: targetPanX, y: targetPanY }
-    });
   };
 
   const handleBgPointerDown = (e, view) => {
@@ -410,6 +564,12 @@ export const useBeamlineState = (computedItems) => {
           periodLength: 50,
           numPeriods: 40,
           length: 2.0
+        } : {}),
+        ...(placingType === 'XBPM' ? { 
+          length: 0.425,
+          dimX: 8.5,
+          dimY: 8.5,
+          dimZ: 8.5
         } : {}),
         ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle } : {}),
         ...(isRange ? { 
@@ -514,7 +674,7 @@ export const useBeamlineState = (computedItems) => {
     if (item.type === 'HUTCH') defaultY = -(itemH / 2) - 12;
     if (item.type === 'WALL') defaultY = (itemH / 2) + 12;
     if (item.type === 'SOURCE') defaultY = 24 + 8;
-    const startOffsetX = item.labelOffsets?.[view]?.x !== undefined ? item.labelOffsets[view].x : (item.type === 'SOURCE' ? -(conf.width / 2) : 0);
+    const startOffsetX = item.labelOffsets?.[view]?.x !== undefined ? item.labelOffsets[view].x : (item.type === 'SOURCE' ? -((item.dimX ?? conf.width) / 2) : 0);
     const startOffsetY = item.labelOffsets?.[view]?.y !== undefined ? item.labelOffsets[view].y : defaultY;
     setDraggingInfo({
       type: 'label',
@@ -616,6 +776,10 @@ export const useBeamlineState = (computedItems) => {
              const halfWMeters = (item.dimX ?? 0) / 2 / PX_PER_M;
              updatedItem.start = parseFloat((newDistance - halfWMeters).toFixed(2));
              updatedItem.end = parseFloat((newDistance + halfWMeters).toFixed(2));
+          } else if (item.type === 'SOURCE') {
+             const sLen = getItemLengthM(item);
+             updatedItem.end = newDistance;
+             updatedItem.start = parseFloat((newDistance - sLen).toFixed(3));
           }
 
           return updatedItem;
@@ -726,26 +890,31 @@ export const useBeamlineState = (computedItems) => {
           const updated = { ...i, [propName]: val };
 
           if (i.type === 'SOURCE') {
-            if (propName === 'numPeriods' && !isNaN(val) && val !== '') {
+            if (['start', 'end', 'distance'].includes(propName)) {
+              const constraint = i.lockLength ? 'LOCK_LENGTH' : (i.lockCenter ? 'LOCK_CENTER' : 'ADJUST_LENGTH');
+              return calculateUpdatedBounds(i, propName, val, constraint);
+            } else if (propName === 'length' && !isNaN(val) && val !== '') {
+              return calculateUpdatedBounds(i, 'length', val);
+            } else if (propName === 'numPeriods' && !isNaN(val) && val !== '') {
               const n = Math.max(1, parseInt(val));
               const pLen = updated.periodLength || (updated.sourceType === 'Wiggler' ? 100 : 50);
               updated.numPeriods = n;
               updated.length = parseFloat(((n * pLen) / 1000).toFixed(3));
               updated.dimX = updated.length * PX_PER_M;
+              updated.end = i.end !== undefined ? i.end : (i.distance ?? 0);
+              updated.start = parseFloat((updated.end - updated.length).toFixed(3));
+              updated.distance = updated.end;
+              updated.x = ORIGIN_X + updated.end * PX_PER_M;
             } else if (propName === 'periodLength' && !isNaN(val) && val !== '') {
               const pLen = Math.max(1, parseFloat(val));
               const n = updated.numPeriods || (updated.sourceType === 'Wiggler' ? 20 : 40);
               updated.periodLength = pLen;
               updated.length = parseFloat(((n * pLen) / 1000).toFixed(3));
               updated.dimX = updated.length * PX_PER_M;
-            } else if (propName === 'length' && !isNaN(val) && val !== '') {
-              const len = Math.max(0.1, parseFloat(val));
-              updated.length = len;
-              updated.dimX = len * PX_PER_M;
-              if (updated.sourceType !== 'Bending Magnet') {
-                const pLen = updated.periodLength || (updated.sourceType === 'Wiggler' ? 100 : 50);
-                updated.numPeriods = Math.max(1, Math.round((len * 1000) / pLen));
-              }
+              updated.end = i.end !== undefined ? i.end : (i.distance ?? 0);
+              updated.start = parseFloat((updated.end - updated.length).toFixed(3));
+              updated.distance = updated.end;
+              updated.x = ORIGIN_X + updated.end * PX_PER_M;
             } else if (propName === 'sourceType') {
               if (val === 'Bending Magnet') {
                 updated.dimX = 30;
@@ -758,14 +927,23 @@ export const useBeamlineState = (computedItems) => {
                 updated.length = parseFloat(((pLen * n) / 1000).toFixed(3));
                 updated.dimX = updated.length * PX_PER_M;
               }
+              updated.end = i.end !== undefined ? i.end : (i.distance ?? 0);
+              updated.start = parseFloat((updated.end - updated.length).toFixed(3));
+              updated.distance = updated.end;
+              updated.x = ORIGIN_X + updated.end * PX_PER_M;
             }
-          } else {
-            if (propName === 'length' && !isNaN(val) && val !== '') {
-              updated.dimX = Number(val) * PX_PER_M;
-            }
-          }
-
-          if (['WALL', 'HUTCH', 'CHAMBER'].includes(i.type)) {
+          } else if (['start', 'end'].includes(propName)) {
+            const constraint = i.lockLength ? 'LOCK_LENGTH' : (i.lockCenter ? 'LOCK_CENTER' : 'ADJUST_LENGTH');
+            return calculateUpdatedBounds(i, propName, val, constraint);
+          } else if (propName === 'lockLength') {
+            updated.lockLength = Boolean(val);
+            if (val) updated.lockCenter = false;
+          } else if (propName === 'lockCenter') {
+            updated.lockCenter = Boolean(val);
+            if (val) updated.lockLength = false;
+          } else if (propName === 'length' && !isNaN(val) && val !== '') {
+            return calculateUpdatedBounds(i, 'length', val);
+          } else if (['WALL', 'HUTCH', 'CHAMBER'].includes(i.type)) {
             const s = propName === 'start' ? Number(val) : (i.start ?? 0);
             const e = propName === 'end' ? Number(val) : (i.end ?? 0);
             const startX = ORIGIN_X + s * PX_PER_M;
@@ -774,16 +952,50 @@ export const useBeamlineState = (computedItems) => {
             updated.dimX = Math.abs(endX - startX);
             updated.distance = (s + e) / 2;
           } else if (['VDCM', 'HDCM'].includes(i.type)) {
-            const d = propName === 'exitOffset' ? Number(val) : (i.exitOffset ?? 0.5);
-            const a = propName === 'braggAngle' ? Number(val) : (i.braggAngle ?? 20);
-            const tan2theta = Math.tan(2 * a * Math.PI / 180);
-            const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
-            updated.dimX = L + 80; 
+            if (propName === 'housingLength') {
+              if (val === undefined || val === '') {
+                delete updated.housingLength;
+                const d = i.exitOffset ?? 0.5;
+                const a = i.braggAngle ?? 20;
+                const tan2theta = Math.tan(2 * a * Math.PI / 180);
+                const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+                updated.dimX = L + 80;
+              } else {
+                const num = parseFloat(val);
+                if (!isNaN(num) && num > 0) {
+                  updated.housingLength = num;
+                  updated.dimX = num * PX_PER_M;
+                }
+              }
+            } else if (propName === 'housingHeight') {
+              if (val === undefined || val === '') {
+                delete updated.housingHeight;
+                delete updated.dimY;
+                delete updated.dimZ;
+              } else {
+                const num = parseFloat(val);
+                if (!isNaN(num) && num > 0) {
+                  updated.housingHeight = num;
+                  updated.dimY = num * PX_PER_M;
+                  updated.dimZ = num * PX_PER_M;
+                }
+              }
+            } else {
+              const d = propName === 'exitOffset' ? Number(val) : (i.exitOffset ?? 0.5);
+              const a = propName === 'braggAngle' ? Number(val) : (i.braggAngle ?? 20);
+              const tan2theta = Math.tan(2 * a * Math.PI / 180);
+              const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
+              if (updated.housingLength !== undefined && !isNaN(updated.housingLength) && Number(updated.housingLength) > 0) {
+                updated.dimX = Number(updated.housingLength) * PX_PER_M;
+              } else {
+                updated.dimX = L + 80; 
+              }
+            }
             if (propName === 'distance' && !isNaN(val) && val !== '') {
                updated.x = ORIGIN_X + Number(val) * PX_PER_M;
             }
           } else if (propName === 'distance' && !isNaN(val) && val !== '') {
-            updated.x = ORIGIN_X + Number(val) * PX_PER_M;
+            return calculateUpdatedBounds(i, 'distance', val);
           }
           if (propName === 'height' && !isNaN(val) && val !== '') {
             updated.y = 150 - (Number(val) * PX_PER_M);
@@ -793,7 +1005,7 @@ export const useBeamlineState = (computedItems) => {
           return updated;
         }
         return i;
-      }).sort((a, b) => (a.distance || 0) - (b.distance || 0)));
+      }));
     }
   };
 
@@ -805,6 +1017,8 @@ export const useBeamlineState = (computedItems) => {
     showAnnotations, setShowAnnotations,
     canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView,
     lastClickedView, setLastClickedView, isJsonModalOpen, setIsJsonModalOpen,
+    isSettingsModalOpen, setIsSettingsModalOpen, canvasSettings, setCanvasSettings,
+    isTableOpen, setIsTableOpen, tableViewMode, setTableViewMode, isCadExportOpen, setIsCadExportOpen,
     jsonText, setJsonText, pan, setPan, sideViewRef, topViewRef, sideScrollRef, topScrollRef,
     selectedItem, sourceItem, canvasWidth, handleWheel, loadTemplate, handleClearAll,
     handleOpenJsonModal, handleApplyJson, handleFitToScreen, handleBgPointerDown,

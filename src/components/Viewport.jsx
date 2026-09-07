@@ -10,7 +10,7 @@ export const Viewport = ({
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
   handleResizePointerDown, handleLabelPointerDown, handleLabelDoubleClick,
-  setEditingLabel, setItems, ghostPos
+  setEditingLabel, setItems, ghostPos, canvasSettings
 }) => {
   const isPanning = draggingInfo?.type === 'pan' && draggingInfo?.view === viewType;
 
@@ -90,7 +90,7 @@ export const Viewport = ({
                           <text 
                             x={x} y="52" 
                             fill={isDarkMode ? '#94a3b8' : '#64748b'} 
-                            fontSize="10" 
+                            fontSize={canvasSettings?.rulerTextSize || 10} 
                             fontFamily="sans-serif" 
                             fontWeight="bold" 
                             textAnchor="middle"
@@ -127,7 +127,9 @@ export const Viewport = ({
                   ? item.distance
                   : (posX - ORIGIN_X) / PX_PER_M;
                 const labelText = `${parseFloat(Number(distVal).toFixed(2))}m`;
-                const badgeWidth = Math.max(34, labelText.length * 6.5 + 10);
+                const annotSize = canvasSettings?.annotationTextSize || 9;
+                const badgeWidth = Math.max(34, labelText.length * (annotSize * 0.7) + 8);
+                const badgeHeight = annotSize + 6;
 
                 return {
                   item,
@@ -138,6 +140,8 @@ export const Viewport = ({
                   posX,
                   labelText,
                   badgeWidth,
+                  badgeHeight,
+                  annotSize,
                   left: posX - badgeWidth / 2,
                   right: posX + badgeWidth / 2
                 };
@@ -167,8 +171,9 @@ export const Viewport = ({
                 }
 
                 // Vertical positions
-                const badgeBottom = 38 - assignedLevel * 18;  // baseline of badge, above ruler
-                const badgeY      = badgeBottom - 15;          // top of 15px-tall badge rect
+                const stepY = (annot.badgeHeight || 15) + 3;
+                const badgeBottom = 38 - assignedLevel * stepY;
+                const badgeY      = badgeBottom - (annot.badgeHeight || 15);
 
                 return { ...annot, level: assignedLevel, badgeBottom, badgeY };
               });
@@ -215,7 +220,7 @@ export const Viewport = ({
                           x={posX - badgeWidth / 2}
                           y={badgeY}
                           width={badgeWidth}
-                          height="15"
+                          height={annot.badgeHeight || 15}
                           rx="3"
                           fill={badgeBg}
                           stroke={badgeBorder}
@@ -226,9 +231,9 @@ export const Viewport = ({
                         {/* 5. Distance label text */}
                         <text
                           x={posX}
-                          y={badgeY + 11}
+                          y={badgeY + (annot.annotSize || 9) + 2}
                           fill={textColor}
-                          fontSize="9"
+                          fontSize={annot.annotSize || 9}
                           fontFamily="sans-serif"
                           fontWeight="bold"
                           textAnchor="middle"
@@ -276,8 +281,26 @@ export const Viewport = ({
               const isGratingActive = item.type === 'GRATING' && ((viewType === 'SIDE' && (item.orientation || 'Vertical') === 'Vertical') || (viewType === 'TOP' && item.orientation === 'Horizontal'));
               const isSimpleMirrorActive = (item.type === 'VFM' && viewType === 'SIDE') || (item.type === 'HFM' && viewType === 'TOP') || isGratingActive;
               
-              const itemW = item.dimX ?? conf.width;
-              const itemH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
+              const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+              const isDCM = item.type === 'VDCM' || item.type === 'HDCM';
+              const isSource = item.type === 'SOURCE';
+
+              // Visual width of component graphic:
+              // Range elements (WALL/HUTCH/CHAMBER), DCM housing, and SOURCE scale with their visual length.
+              // All optical components (SLIT, FILTER, XBPM, SCREEN, VFM, HFM, SAMPLE, DETECTOR, GRATING)
+              // retain their intrinsic un-stretched icon width!
+              const itemW = (isRange || isDCM || isSource) ? (item.dimX ?? conf.width) : conf.width;
+              const itemH = item.type === 'XBPM' 
+                ? conf.height 
+                : (viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height));
+
+              // Physical footprint envelope (dashed bounding box)
+              const physLengthM = item.length !== undefined && !isNaN(item.length)
+                ? parseFloat(item.length)
+                : (conf.defaultLength || parseFloat(((conf.width || 20) / PX_PER_M).toFixed(3)));
+              const footprintW = Math.max(1, physLengthM * PX_PER_M);
+              const footprintH = Math.max(itemH + 14, 28);
+              const showFootprintBox = !isRange && Boolean(item.showFootprint);
 
               let rotation = 0;
               if (item.type === 'GRATING' || isSimpleMirrorActive) {
@@ -298,9 +321,16 @@ export const Viewport = ({
                   }
               }
 
-              const isDCM = item.type === 'VDCM' || item.type === 'HDCM';
-              let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? '40px 50%' : '50% 50%');
-              let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? 'translate(-40px, -50%)' : 'translate(-50%, -50%)');
+              let dcmAnchorX = 40;
+              if (isDCM) {
+                const d_m = item.exitOffset ?? 0.5;
+                const th_deg = item.braggAngle ?? 20;
+                const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
+                const L = Math.abs(tan2th) > 0.001 ? Math.abs((d_m * PX_PER_M) / tan2th) : 40;
+                dcmAnchorX = Math.max(10, (itemW - L) / 2);
+              }
+              let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? `${dcmAnchorX}px 50%` : '50% 50%');
+              let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? `translate(-${dcmAnchorX}px, -50%)` : 'translate(-50%, -50%)');
               if (item.type === 'SOURCE') {
                   transformOrigin = '100% 50%';
                   transformOffset = 'translate(-100%, -50%)';
@@ -312,6 +342,9 @@ export const Viewport = ({
               const labelName = item.customName || defaultName;
               
               let defaultOffsetY = isSimpleMirrorActive ? itemH + 8 : (itemH / 2) + 8;
+              if (showFootprintBox) {
+                defaultOffsetY = Math.max(defaultOffsetY, (footprintH / 2) + 8);
+              }
               if (item.type === 'SOURCE') defaultOffsetY = 24 + 8;
               if (item.type === 'WALL') defaultOffsetY = (itemH / 2) + 12;
               if (item.type === 'HUTCH') defaultOffsetY = -(itemH / 2) - 12;
@@ -337,7 +370,8 @@ export const Viewport = ({
               const zIndexClass = `z-[${zIndex}] hover:z-[50]`;
               const resizeHandlePos = viewType === 'SIDE' ? { right: '-6px', top: '-6px', cursor: 'nesw-resize' } : { right: '-6px', bottom: '-6px', cursor: 'nwse-resize' };
               
-              const labelVisible = item.showLabel !== false;
+              const globalShowLabels = canvasSettings?.showLabels !== false;
+              const labelVisible = isEditing || (globalShowLabels && (item.showLabel !== false));
 
               return (
                 <div
@@ -350,6 +384,39 @@ export const Viewport = ({
                     transition: isDraggingThis ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out'
                   }}
                 >
+                  {/* FOOTPRINT ENVELOPE (DASHED BOX) */}
+                  {showFootprintBox && (
+                    <div
+                      className="absolute pointer-events-none rounded-none flex items-start justify-center transition-all duration-150"
+                      style={{
+                        width: `${footprintW}px`,
+                        height: `${footprintH}px`,
+                        left: 0,
+                        top: 0,
+                        transform: isSource ? 'translate(-100%, -50%)' : 'translate(-50%, -50%)',
+                        border: isSelected 
+                          ? '1.5px dashed #3b82f6' 
+                          : `1px dashed ${isDarkMode ? 'rgba(56, 189, 248, 0.7)' : 'rgba(2, 132, 199, 0.7)'}`,
+                        backgroundColor: isSelected 
+                          ? (isDarkMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.06)') 
+                          : (isDarkMode ? 'rgba(56, 189, 248, 0.04)' : 'rgba(2, 132, 199, 0.04)'),
+                        zIndex: isSelected ? 30 : 10,
+                      }}
+                    >
+                      <span
+                        className="text-[9px] font-mono tracking-tight px-1 py-0 select-none pointer-events-none"
+                        style={{
+                          transform: 'translateY(-100%)',
+                          color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : (isDarkMode ? '#38bdf8' : '#0284c7'),
+                          fontWeight: isSelected ? '700' : '500',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        L: {physLengthM}m
+                      </span>
+                    </div>
+                  )}
+
                   <div
                     onPointerDown={(e) => handlePointerDown(e, item.id, viewType, refObj)}
                     onClick={(e) => e.stopPropagation()}
@@ -376,11 +443,13 @@ export const Viewport = ({
 
                   {labelVisible && (
                     <div 
-                      className={`absolute whitespace-nowrap text-[9px] px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
+                      className={`absolute whitespace-nowrap px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
                       style={{ 
                         transform: 'translateX(-50%)',
                         left: labelOffsetX,
                         top: labelOffsetY,
+                        fontSize: `${canvasSettings?.textSize || 10}px`,
+                        fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
                         color: isDarkMode ? '#cbd5e1' : '#334155',
                         textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
                       }}
@@ -407,11 +476,13 @@ export const Viewport = ({
                             }
                             if (e.key === 'Escape') setEditingLabel(null);
                           }}
-                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 text-[9px] select-text"
+                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 select-text"
                           style={{ 
+                            fontSize: `${canvasSettings?.textSize || 10}px`,
+                            fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
                             color: isDarkMode ? '#60a5fa' : '#2563eb',
                             textShadow: 'none',
-                            width: `${Math.max(editingLabel.text.length * 7, 30)}px` 
+                            width: `${Math.max(editingLabel.text.length * ((canvasSettings?.textSize || 10) * 0.7), 30)}px` 
                           }}
                         />
                       ) : (
@@ -446,7 +517,7 @@ export const Viewport = ({
                }
 
                const itemW = mockItem.dimX;
-               const itemH = viewType === 'SIDE' ? mockItem.dimY : mockItem.dimZ; 
+               const itemH = placingType === 'XBPM' ? itemW : (viewType === 'SIDE' ? mockItem.dimY : mockItem.dimZ); 
                
                const ghostDist = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(1));
                const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson, Tag } from 'lucide-react';
+import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, FileJson, Tag, Sliders, Type, Table, Sparkles, FileDown } from 'lucide-react';
 import { TYPES, templates } from '../constants';
 
 export const Sidebar = ({ 
@@ -22,7 +22,15 @@ export const Sidebar = ({
   activeView, 
   setActiveView, 
   addItem, 
-  placingType 
+  placingType,
+  setIsSettingsModalOpen,
+  canvasSettings,
+  setCanvasSettings,
+  isTableOpen,
+  setIsTableOpen,
+  setIsCadExportOpen,
+  items = [],
+  onExportCsv
 }) => {
   return (
     <div className={`${showUI ? 'w-72 border-r' : 'w-0 overflow-hidden'} flex flex-col z-30 transition-all duration-300 ${theme.panelBg} ${theme.panelBorder} shadow-xl`}>
@@ -56,6 +64,37 @@ export const Sidebar = ({
                 <FileJson size={14} /> JSON Port
               </button>
             </div>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <button 
+                onClick={() => setIsTableOpen && setIsTableOpen(!isTableOpen)} 
+                className={`flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${
+                  isTableOpen ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`
+                }`}
+                title="Toggle Construction Schedule Table & Clearance Guide"
+              >
+                <Table size={14} className={isTableOpen ? 'text-white' : 'text-blue-500'} /> Table Guide
+              </button>
+              <button 
+                onClick={() => setIsCadExportOpen && setIsCadExportOpen(true)} 
+                className={`flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text} hover:border-blue-500 hover:text-blue-500`}
+                title="Export vector CAD blueprint (SVG)"
+              >
+                <Sparkles size={14} className="text-blue-500" /> CAD (SVG)
+              </button>
+            </div>
+            <button 
+              onClick={() => onExportCsv && onExportCsv()} 
+              className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500 mt-1`}
+              title="Download construction schedule spreadsheet (.csv) for Excel"
+            >
+              <FileDown size={14} className="text-emerald-500" /> Export Table to CSV
+            </button>
+            <button 
+              onClick={() => setIsSettingsModalOpen(true)} 
+              className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-none text-xs font-bold transition-colors ${theme.buttonBg} ${theme.text}`}
+            >
+              <Sliders size={14} className="text-blue-500" /> Canvas Settings
+            </button>
             <button onClick={handleClearAll} className="w-full flex items-center justify-center gap-1 p-2 border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 rounded-none text-xs font-bold transition-colors">
               <Trash2 size={14} /> Clear All
             </button>
@@ -67,12 +106,19 @@ export const Sidebar = ({
                 <Magnet size={14} /> Snap
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <button onClick={() => setShowRuler(!showRuler)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${showRuler ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
-                <Ruler size={14} /> Ruler
+            <div className="grid grid-cols-3 gap-1.5 mt-1">
+              <button onClick={() => setShowRuler(!showRuler)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-[11px] font-bold transition-colors ${showRuler ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
+                <Ruler size={13} /> Ruler
               </button>
-              <button onClick={() => setShowAnnotations(!showAnnotations)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-xs font-bold transition-colors ${showAnnotations ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
-                <Tag size={14} /> Annotate
+              <button onClick={() => setShowAnnotations(!showAnnotations)} className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-[11px] font-bold transition-colors ${showAnnotations ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}>
+                <Tag size={13} /> Annotate
+              </button>
+              <button 
+                onClick={() => setCanvasSettings && setCanvasSettings(prev => ({ ...prev, showLabels: prev?.showLabels === false ? true : false }))} 
+                className={`w-full flex items-center justify-center gap-1 p-2 border rounded-none text-[11px] font-bold transition-colors ${(canvasSettings?.showLabels !== false) ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text}`}`}
+                title="Toggle Component Labels visibility"
+              >
+                <Type size={13} /> Labels
               </button>
             </div>
             <div className="flex flex-col mt-1">

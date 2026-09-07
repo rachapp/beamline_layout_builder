@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Sun, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Moon, Sun, PanelLeftClose, PanelLeftOpen, Sliders, Table, Sparkles, FileDown } from 'lucide-react';
 
 import { useTheme } from './src/hooks/useTheme';
 import { usePhysicsEngine } from './src/hooks/usePhysicsEngine';
@@ -9,6 +9,10 @@ import { Sidebar } from './src/components/Sidebar';
 import { Viewport } from './src/components/Viewport';
 import { PropertiesWidget } from './src/components/PropertiesWidget';
 import { JsonModal } from './src/components/JsonModal';
+import { SettingsModal } from './src/components/SettingsModal';
+import { TableView } from './src/components/TableView';
+import { CadSvgExportModal } from './src/components/CadSvgExportModal';
+import { downloadCsv } from './src/utils/constructionUtils';
 
 export default function App() {
   const { isDarkMode, setIsDarkMode, theme } = useTheme();
@@ -26,7 +30,46 @@ export default function App() {
     <div className={`flex h-screen w-full font-sans overflow-hidden select-none ${theme.bg}`}>
       
       {/* FLOATING GLOBAL TOOLBAR */}
-      <div className="absolute top-4 right-4 z-50 flex gap-2">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+         {/* Construction Table Schedule Toggle */}
+         <button 
+           onClick={() => state.setIsTableOpen(!state.isTableOpen)} 
+           title={state.isTableOpen ? "Hide Construction Table Schedule" : "Open Construction Schedule & Clearance Table"} 
+           className={`px-2.5 py-1.5 border shadow-sm rounded-none transition-colors flex items-center gap-1.5 text-xs font-bold ${
+             state.isTableOpen ? 'bg-blue-600 text-white border-blue-700' : `${theme.buttonBg} ${theme.text} hover:border-blue-500`
+           }`}
+         >
+            <Table size={16} className={state.isTableOpen ? 'text-white' : 'text-blue-500'} />
+            <span className="hidden md:inline">Table Guide</span>
+         </button>
+
+         {/* CAD Vector Export Button */}
+         <button 
+           onClick={() => state.setIsCadExportOpen(true)} 
+           title="Export CAD Vector Blueprint (SVG)" 
+           className={`px-2.5 py-1.5 border shadow-sm rounded-none transition-colors flex items-center gap-1.5 text-xs font-bold ${theme.buttonBg} ${theme.text} hover:border-blue-500`}
+         >
+            <Sparkles size={16} className="text-blue-500" />
+            <span className="hidden md:inline">CAD SVG</span>
+         </button>
+
+         {/* Export Table to CSV Button */}
+         <button 
+           onClick={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)} 
+           title="Export Construction Schedule Table to CSV (Excel compatible)" 
+           className={`px-2.5 py-1.5 border shadow-sm rounded-none transition-colors flex items-center gap-1.5 text-xs font-bold ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500`}
+         >
+            <FileDown size={16} className="text-emerald-500" />
+            <span className="hidden md:inline">Export CSV</span>
+         </button>
+
+         <button 
+           onClick={() => state.setIsSettingsModalOpen(true)} 
+           title="Global Canvas Settings (Text Size, etc.)" 
+           className={`p-2 border shadow-sm rounded-none transition-colors ${theme.buttonBg} ${theme.text}`}
+         >
+            <Sliders size={18} />
+         </button>
          <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 border shadow-sm rounded-none transition-colors ${theme.buttonBg} ${theme.text}`}>
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
          </button>
@@ -57,12 +100,22 @@ export default function App() {
         setActiveView={state.setActiveView}
         addItem={state.addItem}
         placingType={state.placingType}
+        setIsSettingsModalOpen={state.setIsSettingsModalOpen}
+        canvasSettings={state.canvasSettings}
+        setCanvasSettings={state.setCanvasSettings}
+        isTableOpen={state.isTableOpen}
+        setIsTableOpen={state.setIsTableOpen}
+        setIsCadExportOpen={state.setIsCadExportOpen}
+        items={state.items}
+        onExportCsv={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
       />
 
-      {/* DUAL VIEWPORT AREA */}
-      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: theme.canvasBg }}>
-        {state.activeView !== 'SIDE' && (
-          <Viewport 
+      {/* DUAL VIEWPORT AREA + TABLE */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ backgroundColor: theme.canvasBg }}>
+        {(!state.isTableOpen || state.tableViewMode !== 'full') && (
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            {state.activeView !== 'SIDE' && (
+              <Viewport 
             viewType="TOP"
             title="TOP"
             refObj={state.topViewRef}
@@ -98,6 +151,7 @@ export default function App() {
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
+            canvasSettings={state.canvasSettings}
           />
         )}
         {state.activeView !== 'TOP' && (
@@ -137,6 +191,26 @@ export default function App() {
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
+            canvasSettings={state.canvasSettings}
+          />
+        )}
+          </div>
+        )}
+
+        {/* CONSTRUCTION SCHEDULE & SPATIAL CLEARANCE TABLE */}
+        {state.isTableOpen && (
+          <TableView 
+            items={state.items}
+            setItems={state.setItems}
+            selectedId={state.selectedId}
+            setSelectedId={state.setSelectedId}
+            canvasLength={state.canvasLength}
+            theme={theme}
+            isDarkMode={isDarkMode}
+            onClose={() => state.setIsTableOpen(false)}
+            viewMode={state.tableViewMode}
+            setViewMode={state.setTableViewMode}
+            onOpenCadExport={() => state.setIsCadExportOpen(true)}
           />
         )}
       </div>
@@ -155,6 +229,7 @@ export default function App() {
         setItems={state.setItems}
         selectedId={state.selectedId}
         deleteSelected={state.deleteSelected}
+        canvasSettings={state.canvasSettings}
       />
 
       {/* JSON DATA PORTAL MODAL */}
@@ -166,6 +241,28 @@ export default function App() {
         theme={theme}
         isDarkMode={isDarkMode}
         handleApplyJson={state.handleApplyJson}
+      />
+
+      {/* GLOBAL CANVAS SETTINGS MODAL */}
+      <SettingsModal 
+        isOpen={state.isSettingsModalOpen}
+        onClose={() => state.setIsSettingsModalOpen(false)}
+        canvasSettings={state.canvasSettings}
+        setCanvasSettings={state.setCanvasSettings}
+        items={state.items}
+        setItems={state.setItems}
+        theme={theme}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* CAD VECTOR SVG EXPORT MODAL */}
+      <CadSvgExportModal 
+        isOpen={state.isCadExportOpen}
+        onClose={() => state.setIsCadExportOpen(false)}
+        items={state.items}
+        canvasLength={state.canvasLength}
+        theme={theme}
+        isDarkMode={isDarkMode}
       />
     </div>
   );

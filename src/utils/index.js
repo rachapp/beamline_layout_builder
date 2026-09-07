@@ -41,9 +41,15 @@ export const mapTemplateToItems = (templateData) => {
     const y = isChamber ? 150 - (h * PX_PER_M) : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M));
     const z = isChamber ? 150 + (o * PX_PER_M) : ((isRange) ? 150 : 150 + (o * PX_PER_M));
     
-    const dimY = isRange ? (h * PX_PER_M) : undefined;
-    const dimZ = isRange ? (h * PX_PER_M) : undefined;
+    let dimY = isRange ? (h * PX_PER_M) : undefined;
+    let dimZ = isRange ? (h * PX_PER_M) : undefined;
 
+    if (item.type === 'XBPM') {
+      dimY = dimX;
+      dimZ = dimX;
+    }
+
+    const isSource = item.type === 'SOURCE';
     let start = parseFloat(item.start);
     let end = parseFloat(item.end);
 
@@ -56,12 +62,19 @@ export const mapTemplateToItems = (templateData) => {
       const wMeters = (item.dimX ?? itemConfig.width) / PX_PER_M;
       start = dist - wMeters / 2;
       end = dist + wMeters / 2;
+    } else if (isSource) {
+      end = isNaN(end) ? dist : end;
+      start = isNaN(start) ? parseFloat((end - physicalLength).toFixed(3)) : start;
     } else if (['VDCM', 'HDCM'].includes(item.type)) {
       const D_m = parseFloat(item.exitOffset) ?? 0.5;
       const theta_deg = parseFloat(item.braggAngle) ?? 20;
       const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
       const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
-      dimX = L + 80;
+      dimX = item.housingLength !== undefined ? (parseFloat(item.housingLength) * PX_PER_M) : (item.dimX ?? (L + 80));
+      if (item.housingHeight !== undefined) {
+        dimY = parseFloat(item.housingHeight) * PX_PER_M;
+        dimZ = parseFloat(item.housingHeight) * PX_PER_M;
+      }
     }
 
     return {
@@ -79,7 +92,7 @@ export const mapTemplateToItems = (templateData) => {
       dimY,
       dimZ,
       showLabel: item.showLabel !== false,
-      ...(isRange ? { start, end } : {})
+      ...(isRange ? { start, end } : (isSource ? { start, end } : {}))
     };
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
 };
@@ -94,7 +107,7 @@ export const getDefaultColors = (type, isDarkMode, theme) => {
       case 'HUTCH': return { primary: isDarkMode ? '#475569' : '#94a3b8', secondary: 'transparent' };
       case 'CHAMBER': return { primary: isDarkMode ? '#60a5fa' : '#3b82f6', secondary: 'transparent' };
       case 'XBPM': return { primary: theme.compBorder, secondary: '#ef4444' };
-      case 'SCREEN': return { primary: '#22c55e', secondary: '#22c55e' };
+      case 'SCREEN': return { primary: '#22c55e', secondary: theme.compBorder };
       case 'VDCM': case 'HDCM': return { primary: '#0891b2', secondary: isDarkMode ? '#164e63' : '#cffafe' };
       case 'VFM': case 'HFM': return { primary: theme.compBorder, secondary: isDarkMode ? '#475569' : '#cbd5e1' };
       case 'SAMPLE': return { primary: theme.compBorder, secondary: theme.compBorder };

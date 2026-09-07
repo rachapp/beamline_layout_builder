@@ -1,7 +1,8 @@
-import React from 'react';
-import { Trash2, GripHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, GripHorizontal, Lock, Crosshair } from 'lucide-react';
 import { TYPES, PRESET_COLORS, PX_PER_M } from '../constants';
 import { getDefaultColors } from '../utils';
+import { getItemBoundsM } from '../utils/constructionUtils';
 
 export const PropertiesWidget = ({ 
   selectedItem, 
@@ -15,17 +16,30 @@ export const PropertiesWidget = ({
   items, 
   setItems, 
   selectedId, 
-  deleteSelected 
+  deleteSelected,
+  canvasSettings 
 }) => {
+  const [zIndex, setZIndex] = useState(120);
+
+  const bringToFront = () => {
+    setZIndex(prev => Math.max(prev, Date.now() % 1000 + 130));
+  };
+
   if (!selectedItem) return null;
   
   return (
     <div 
-      className={`absolute z-[100] w-72 border rounded-md flex flex-col ${theme.widgetBg} ${theme.text}`}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
+      className={`absolute w-72 border rounded-md flex flex-col shadow-xl ${theme.widgetBg} ${theme.text}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        bringToFront();
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        bringToFront();
+      }}
       onWheel={(e) => e.stopPropagation()}
-      style={{ left: widgetPos.x, top: widgetPos.y }}
+      style={{ left: widgetPos.x, top: widgetPos.y, zIndex }}
     >
       <div 
          className={`flex items-center justify-between cursor-move p-3 border-b rounded-t-md ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-gray-100 border-gray-200'}`}
@@ -62,7 +76,12 @@ export const PropertiesWidget = ({
                 onChange={(e) => updateItemProp('showLabel', e.target.checked)} 
                 className="w-4 h-4 rounded" 
               />
-              Show Label
+              <span>Show Label</span>
+              {canvasSettings?.showLabels === false && (
+                <span className="text-[9px] text-amber-500 font-normal lowercase tracking-normal">
+                  (globally hidden)
+                </span>
+              )}
            </label>
            <label className="block text-[10px] font-bold uppercase mb-1">Label Name</label>
            <input 
@@ -235,42 +254,95 @@ export const PropertiesWidget = ({
           </div>
         )}
 
-        {!['FILTER', 'SLIT', 'SCREEN', 'WALL', 'HUTCH', 'CHAMBER', 'VDCM', 'HDCM'].includes(selectedItem.type) && (
-          <div>
-             <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Physical Length (m)</label>
-             <input
-               type="number"
-               step="0.1"
-               value={selectedItem.length ?? (TYPES[selectedItem.type].defaultLength || (selectedItem.dimX / PX_PER_M))}
-               onChange={(e) => updateItemProp('length', e.target.value)}
-               className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
-             />
+        {!['WALL', 'HUTCH', 'CHAMBER', 'VDCM', 'HDCM'].includes(selectedItem.type) && (
+          <div className="space-y-2">
+            <div>
+              <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Physical Length (m)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0.05"
+                value={selectedItem.length ?? (TYPES[selectedItem.type].defaultLength || parseFloat(((TYPES[selectedItem.type].width || 20) / PX_PER_M).toFixed(3)))}
+                onChange={(e) => updateItemProp('length', e.target.value)}
+                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={Boolean(selectedItem.showFootprint)} 
+                  onChange={(e) => updateItemProp('showFootprint', e.target.checked)} 
+                  className="w-4 h-4 rounded text-blue-600" 
+                />
+                Show Footprint Box (Dashed Outline)
+              </label>
+            </div>
           </div>
         )}
 
         {['VDCM', 'HDCM'].includes(selectedItem.type) && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Cryst 1 Len (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={selectedItem.crystal1Length ?? TYPES[selectedItem.type].defaultCrystal1Length}
-                onChange={(e) => updateItemProp('crystal1Length', e.target.value)}
-                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
-              />
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Cryst 1 Len (m)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={selectedItem.crystal1Length ?? TYPES[selectedItem.type].defaultCrystal1Length}
+                  onChange={(e) => updateItemProp('crystal1Length', e.target.value)}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Cryst 2 Len (m)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={selectedItem.crystal2Length ?? TYPES[selectedItem.type].defaultCrystal2Length}
+                  onChange={(e) => updateItemProp('crystal2Length', e.target.value)}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase mb-1 text-green-500">Cryst 2 Len (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={selectedItem.crystal2Length ?? TYPES[selectedItem.type].defaultCrystal2Length}
-                onChange={(e) => updateItemProp('crystal2Length', e.target.value)}
-                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text} border-green-400`}
-              />
+
+            <div className="flex flex-col gap-2 p-2 border rounded-none border-cyan-500/40 bg-cyan-500/5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-500">DCM Housing Size</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Housing Length (m)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    value={selectedItem.housingLength !== undefined ? selectedItem.housingLength : parseFloat(((selectedItem.dimX ?? 160) / PX_PER_M).toFixed(2))}
+                    onChange={(e) => updateItemProp('housingLength', e.target.value)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Housing Height (m)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    value={selectedItem.housingHeight !== undefined ? selectedItem.housingHeight : parseFloat((((selectedItem.dimY ?? selectedItem.dimZ) ?? 60) / PX_PER_M).toFixed(2))}
+                    onChange={(e) => updateItemProp('housingHeight', e.target.value)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  updateItemProp('housingLength', '');
+                  updateItemProp('housingHeight', '');
+                }}
+                className={`w-full py-1 text-[9px] font-bold opacity-75 hover:opacity-100 border rounded-none transition-colors ${theme.buttonBg} ${theme.text}`}
+              >
+                Reset to Auto / Default Size
+              </button>
             </div>
-          </div>
+          </>
         )}
         {!['WALL', 'HUTCH'].includes(selectedItem.type) && (
           <div className="grid grid-cols-2 gap-2">
@@ -298,41 +370,91 @@ export const PropertiesWidget = ({
           </div>
         )}
 
-        {['WALL', 'HUTCH', 'CHAMBER'].includes(selectedItem.type) ? (
+        {/* BEAMLINE COORDINATES & BOUNDARIES */}
+        <div className="p-2 border rounded-none bg-blue-500/5 border-blue-500/20 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
+              Beamline Position & Boundaries
+            </span>
+            <span className="text-[9px] opacity-60 font-mono">
+              {selectedItem.lockLength ? '🔒 Locked Length' : selectedItem.lockCenter ? '🎯 Locked Center' : '↔ Auto-Adjust'}
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[10px] font-bold uppercase">
+                {selectedItem.type === 'SOURCE' ? 'Center X (m) [= Downstream Exit]' : 'Center Distance X (m)'}
+              </label>
+              {selectedItem.type === 'SOURCE' && (
+                <span className="text-[9px] text-blue-500 font-mono font-bold">X = Downstream = 0</span>
+              )}
+            </div>
+            <input
+              type="number"
+              step="0.05"
+              value={getItemBoundsM(selectedItem).dist}
+              onChange={(e) => updateItemProp('distance', e.target.value)}
+              className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+              title={selectedItem.type === 'SOURCE' ? "Source center value = downstream exit coordinate (default 0m, upstream = downstream - length)" : "Component centerline coordinate along beam axis"}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div>
-               <label className="block text-[10px] font-bold uppercase mb-1">Start (m)</label>
-               <input
-                 type="number"
-                 step="0.1"
-                 value={selectedItem.start ?? 0}
-                 onChange={(e) => updateItemProp('start', e.target.value)}
-                 className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-               />
+              <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
+                Upstream X₁ (m) ✎
+              </label>
+              <input
+                type="number"
+                step="0.05"
+                value={getItemBoundsM(selectedItem).start}
+                onChange={(e) => updateItemProp('start', e.target.value)}
+                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                title="Upstream entrance face coordinate"
+              />
             </div>
             <div>
-               <label className="block text-[10px] font-bold uppercase mb-1">End (m)</label>
-               <input
-                 type="number"
-                 step="0.1"
-                 value={selectedItem.end ?? 0}
-                 onChange={(e) => updateItemProp('end', e.target.value)}
-                 className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-               />
+              <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
+                Downstream X₂ (m) ✎
+              </label>
+              <input
+                type="number"
+                step="0.05"
+                value={getItemBoundsM(selectedItem).end}
+                onChange={(e) => updateItemProp('end', e.target.value)}
+                className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                title="Downstream exit face coordinate"
+              />
             </div>
           </div>
-        ) : (
-          <div>
-             <label className="block text-[10px] font-bold uppercase mb-1">Distance (m)</label>
-             <input
-               type="number"
-               step="0.1"
-               value={selectedItem.distance ?? 0}
-               onChange={(e) => updateItemProp('distance', e.target.value)}
-               className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-             />
+
+          {/* LOCK CONTROLS */}
+          <div className="flex items-center gap-3 pt-1 text-[10px] border-t border-blue-500/20">
+            <label className="flex items-center gap-1.5 cursor-pointer" title="Lock physical length so editing upstream/downstream moves the item">
+              <input
+                type="checkbox"
+                checked={Boolean(selectedItem.lockLength)}
+                onChange={(e) => updateItemProp('lockLength', e.target.checked)}
+                className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+              />
+              <span className={selectedItem.lockLength ? 'font-bold text-blue-600 dark:text-blue-400' : ''}>
+                Lock Length
+              </span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer" title="Lock center distance so editing upstream/downstream resizes symmetrically">
+              <input
+                type="checkbox"
+                checked={Boolean(selectedItem.lockCenter)}
+                onChange={(e) => updateItemProp('lockCenter', e.target.checked)}
+                className="w-3.5 h-3.5 rounded text-purple-600 cursor-pointer"
+              />
+              <span className={selectedItem.lockCenter ? 'font-bold text-purple-600 dark:text-purple-400' : ''}>
+                Lock Center
+              </span>
+            </label>
           </div>
-        )}
+        </div>
 
         {['HUTCH', 'WALL', 'CHAMBER'].includes(selectedItem.type) && (
           <div>
