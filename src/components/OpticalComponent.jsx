@@ -190,7 +190,7 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
     const isInactive = (type === 'VDCM' && viewType === 'TOP') || (type === 'HDCM' && viewType === 'SIDE');
     if (isInactive) {
       return (
-         <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none" style={{ backgroundColor: theme.inactiveBg }}>
+         <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none border" style={{ backgroundColor: theme.inactiveBg, borderColor: theme.inactiveBorder }}>
            <div className="w-full h-[1.5px]" style={{ backgroundColor: theme.inactiveBorder }} />
          </div>
       );
@@ -208,7 +208,7 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
     const theta_rad = theta_deg * Math.PI / 180;
     const tan2theta = Math.tan(2 * theta_rad);
     const L = Math.abs(tan2theta) > 0.001 ? Math.abs((offset * 20) / tan2theta) : 40;
-    const localAnchorX = Math.max(10, (itemW - L) / 2);
+    const localAnchorX = (itemW - L) / 2;
 
     let c1Config = { left: localAnchorX, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
     let c2Config = { left: localAnchorX + L, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
@@ -257,7 +257,13 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
     const c2Len = (item.crystal2Length ?? TYPES[type].defaultCrystal2Length) * 20;
 
     return (
-      <div className="w-full h-full relative rounded-none">
+      <div 
+        className="w-full h-full relative rounded-none border shadow-sm" 
+        style={{ 
+          borderColor: theme.compBorder, 
+          backgroundColor: isDarkMode ? 'rgba(59, 130, 246, 0.08)' : 'rgba(59, 130, 246, 0.05)' 
+        }}
+      >
         <div className={`absolute flex flex-col shadow-sm rounded-none ${c1Config.justify}`}
              style={{ width: `${c1Len}px`, height: '5px', left: `${c1Config.left}px`, top: `${c1Config.top}px`, transformOrigin: c1Config.origin, transform: `${c1Config.translate} rotate(${c1Config.rot}rad)`, ...crystalStyle}}>
           <div className="w-full h-1/2 opacity-50" style={hatchStyle} />

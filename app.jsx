@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Moon, Sun, PanelLeftClose, PanelLeftOpen, Sliders, Table, Sparkles, FileDown, FileUp, ChevronRight } from 'lucide-react';
 
 import { useTheme } from './src/hooks/useTheme';
@@ -21,13 +21,17 @@ export default function App() {
   const state = useBeamlineState([]);
   const { computedItems, tracePointsSide, tracePointsTop } = usePhysicsEngine(state.items);
 
+  useEffect(() => {
+    state.setComputedItems?.(computedItems);
+  }, [computedItems]);
+
   const rayColor = state.sourceItem.rayColor || theme.beam;
   const rayWidth = state.sourceItem.rayWidth ?? 1.5;
   const rayStyle = state.sourceItem.rayStyle || 'dashed';
   const showArrow = state.sourceItem.showArrow !== false;
 
   return (
-    <div className={`flex h-screen w-full font-sans overflow-hidden select-none ${theme.bg}`}>
+    <div className={`flex h-screen w-full font-sans overflow-hidden select-none ${isDarkMode ? 'dark ' : ''}${theme.bg}`}>
       
       {/* FLOATING GLOBAL TOOLBAR */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
@@ -171,6 +175,7 @@ export default function App() {
             isDarkMode={isDarkMode}
             computedItems={computedItems}
             selectedId={state.selectedId}
+            setSelectedId={state.setSelectedId}
             editingLabel={state.editingLabel}
             rayColor={rayColor}
             rayWidth={rayWidth}
@@ -185,6 +190,7 @@ export default function App() {
             handleResizePointerDown={state.handleResizePointerDown}
             handleLabelPointerDown={state.handleLabelPointerDown}
             handleLabelDoubleClick={state.handleLabelDoubleClick}
+            cancelFocusItem={state.cancelFocusItem}
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
@@ -212,6 +218,7 @@ export default function App() {
             isDarkMode={isDarkMode}
             computedItems={computedItems}
             selectedId={state.selectedId}
+            setSelectedId={state.setSelectedId}
             editingLabel={state.editingLabel}
             rayColor={rayColor}
             rayWidth={rayWidth}
@@ -226,6 +233,7 @@ export default function App() {
             handleResizePointerDown={state.handleResizePointerDown}
             handleLabelPointerDown={state.handleLabelPointerDown}
             handleLabelDoubleClick={state.handleLabelDoubleClick}
+            cancelFocusItem={state.cancelFocusItem}
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
@@ -238,7 +246,7 @@ export default function App() {
         {/* CONSTRUCTION SCHEDULE & SPATIAL CLEARANCE TABLE */}
         {state.isTableOpen && (
           <TableView 
-            items={state.items}
+            items={computedItems && computedItems.length > 0 ? computedItems : state.items}
             setItems={state.setItems}
             selectedId={state.selectedId}
             setSelectedId={state.setSelectedId}
@@ -251,14 +259,14 @@ export default function App() {
             onOpenCadExport={() => state.setIsCadExportOpen(true)}
             onFocusItem={state.focusItem}
             onImportCsv={state.handleImportCsv}
-            onExportCsv={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
+            onExportCsv={() => downloadCsv(computedItems && computedItems.length > 0 ? computedItems : state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
           />
         )}
       </div>
 
       {/* DOCKED RIGHT SIDE PROPERTIES WIDGET */}
       <PropertiesWidget 
-        selectedItem={state.selectedItem}
+        selectedItem={computedItems?.find(i => i.id === state.selectedId) || state.selectedItem}
         theme={theme}
         isDarkMode={isDarkMode}
         setSelectedId={state.setSelectedId}

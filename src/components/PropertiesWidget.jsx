@@ -3,6 +3,7 @@ import { Trash2, Lock, Unlock, Crosshair, RotateCcw } from 'lucide-react';
 import { TYPES, PRESET_COLORS, PX_PER_M } from '../constants';
 import { getDefaultColors } from '../utils';
 import { getItemBoundsM, getOpticPhysicalLengthM, getItemMiscParams, setItemMiscParam } from '../utils/constructionUtils';
+import { BufferedNumberInput } from './BufferedNumberInput';
 
 export const PropertiesWidget = ({ 
   selectedItem, 
@@ -21,8 +22,10 @@ export const PropertiesWidget = ({
   if (!selectedItem) return null;
   
   const misc = getItemMiscParams(selectedItem, activeView);
-  const currentLabelX = misc.labelX;
-  const currentLabelY = misc.labelY;
+  const sideLabelX = misc.labelSideX;
+  const sideLabelY = misc.labelSideY;
+  const topLabelX = misc.labelTopX;
+  const topLabelY = misc.labelTopY;
   
   return (
     <div 
@@ -118,8 +121,217 @@ export const PropertiesWidget = ({
           </button>
         </div>
 
-        {/* BEAMLINE OPTICS CENTER & PHYSICAL DIMENSIONS (CONSOLIDATED UNIFIED BOX) */}
-        {!['WALL', 'HUTCH'].includes(selectedItem.type) ? (
+        {/* WALL & HUTCH ENCLOSURE POSITION & DIMENSIONS */}
+        {['WALL', 'HUTCH'].includes(selectedItem.type) ? (() => {
+          const bounds = getItemBoundsM(selectedItem);
+          const isWall = selectedItem.type === 'WALL';
+          const labelPrefix = isWall ? 'Wall' : 'Hutch';
+          return (
+            <div className="p-3 border rounded-none bg-slate-500/5 border-slate-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  {labelPrefix} Position & Dimensions
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateItemProp('distance', 0)}
+                  title="Reset center position to 0m"
+                  className="flex items-center gap-1 text-[9px] font-bold text-gray-400 hover:text-blue-500 transition-colors"
+                >
+                  <RotateCcw size={10} />
+                  <span>Reset Pos (0m)</span>
+                </button>
+              </div>
+
+              {/* Lock Figure / Mouse Movement Control */}
+              <div className={`p-2 border rounded-none flex items-center justify-between transition-colors ${
+                selectedItem.isLocked 
+                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200' 
+                  : `${theme.buttonBg} border-gray-300 dark:border-slate-700`
+              }`}>
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-none ${selectedItem.isLocked ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300'}`}>
+                    {selectedItem.isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider block">
+                      {selectedItem.isLocked ? `${labelPrefix} Movement: Locked` : `${labelPrefix} Movement: Unlocked`}
+                    </span>
+                    <span className="text-[9px] opacity-70 block">
+                      {selectedItem.isLocked ? 'Mouse drag & arrow keys disabled' : 'Can be dragged & moved freely with mouse'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateItemProp('isLocked', !selectedItem.isLocked)}
+                  className={`px-2.5 py-1 text-xs font-bold border rounded-none transition-all flex items-center gap-1 shadow-sm ${
+                    selectedItem.isLocked
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600'
+                      : `${theme.buttonBg} ${theme.text} hover:border-amber-500 hover:text-amber-500`
+                  }`}
+                  title={selectedItem.isLocked ? "Click to unlock for mouse moving" : "Click to lock from accidental mouse movement"}
+                >
+                  {selectedItem.isLocked ? <Unlock size={12} /> : <Lock size={12} />}
+                  <span>{selectedItem.isLocked ? 'Unlock' : 'Lock Figure'}</span>
+                </button>
+              </div>
+
+              {/* Center Distance X & Thickness / Length */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">
+                    Center Pos X (m)
+                  </label>
+                  <BufferedNumberInput
+                    step={0.05}
+                    value={bounds.dist}
+                    onChange={(val) => updateItemProp('distance', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    title="Component centerline coordinate along beam axis"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
+                      {isWall ? 'Thickness (m)' : 'Length (m)'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultLen = TYPES[selectedItem.type]?.defaultLength ?? (isWall ? 1.2 : 10.0);
+                        updateItemProp('length', defaultLen);
+                        updateItemProp('physicalLength', defaultLen);
+                      }}
+                      title={`Reset to default (${TYPES[selectedItem.type]?.defaultLength ?? (isWall ? 1.2 : 10.0)}m)`}
+                      className="text-gray-400 hover:text-emerald-600 transition-colors"
+                    >
+                      <RotateCcw size={10} />
+                    </button>
+                  </div>
+                  <BufferedNumberInput
+                    step={0.05}
+                    min={0.01}
+                    value={bounds.len}
+                    onChange={(val) => {
+                      updateItemProp('length', val);
+                      updateItemProp('physicalLength', val);
+                    }}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text} border-emerald-500/40`}
+                    title={isWall ? "Thickness of the wall along the beamline" : "Length of the hutch along the beamline"}
+                  />
+                </div>
+              </div>
+
+              {/* Upstream Face X1 and Downstream Face X2 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
+                    Upstream X₁ (m)
+                  </label>
+                  <BufferedNumberInput
+                    step={0.05}
+                    value={bounds.start}
+                    onChange={(val) => updateItemProp('start', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    title="Upstream entrance face coordinate"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
+                    Downstream X₂ (m)
+                  </label>
+                  <BufferedNumberInput
+                    step={0.05}
+                    value={bounds.end}
+                    onChange={(val) => updateItemProp('end', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    title="Downstream exit face coordinate"
+                  />
+                </div>
+              </div>
+
+              {/* Lock Length & Lock Center constraints */}
+              <div className="flex items-center gap-3 pt-1 border-t border-slate-500/20 text-[10px]">
+                <label className="flex items-center gap-1.5 cursor-pointer" title="Lock length/thickness so editing upstream/downstream shifts the entire wall">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedItem.lockLength)}
+                    onChange={(e) => updateItemProp('lockLength', e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                  />
+                  <span className={selectedItem.lockLength ? 'font-bold text-blue-600 dark:text-blue-400' : ''}>
+                    Lock Length
+                  </span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer" title="Lock center position so editing upstream/downstream resizes symmetrically around center">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedItem.lockCenter)}
+                    onChange={(e) => updateItemProp('lockCenter', e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-purple-600 cursor-pointer"
+                  />
+                  <span className={selectedItem.lockCenter ? 'font-bold text-purple-600 dark:text-purple-400' : ''}>
+                    Lock Center
+                  </span>
+                </label>
+              </div>
+
+              {/* Construction Height & Width */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-500/20">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-blue-500">
+                      {labelPrefix} Width (m)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => updateItemProp('wallWidth', 7.0)}
+                      title="Reset width to default (7.0m)"
+                      className="text-gray-400 hover:text-blue-500"
+                    >
+                      <RotateCcw size={10} />
+                    </button>
+                  </div>
+                  <BufferedNumberInput
+                    step={0.1}
+                    min={0.1}
+                    value={selectedItem.wallWidth ?? (selectedItem.dimZ ? selectedItem.dimZ / PX_PER_M : 7.0)}
+                    onChange={(val) => updateItemProp('wallWidth', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text} border-blue-400`}
+                    title="Transverse lateral width across beamline (Top View)"
+                  />
+                  <span className="text-[9px] opacity-60 block mt-0.5">Top View (Z)</span>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-blue-500">
+                      {labelPrefix} Height (m)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => updateItemProp('wallHeight', 7.0)}
+                      title="Reset height to default (7.0m)"
+                      className="text-gray-400 hover:text-blue-500"
+                    >
+                      <RotateCcw size={10} />
+                    </button>
+                  </div>
+                  <BufferedNumberInput
+                    step={0.1}
+                    min={0.1}
+                    value={selectedItem.wallHeight ?? selectedItem.height ?? 7.0}
+                    onChange={(val) => updateItemProp('wallHeight', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text} border-blue-400`}
+                    title="Vertical height from floor (Side View)"
+                  />
+                  <span className="text-[9px] opacity-60 block mt-0.5">Side View (Y)</span>
+                </div>
+              </div>
+            </div>
+          );
+        })() : (
+          /* BEAMLINE OPTICS CENTER & PHYSICAL DIMENSIONS (CONSOLIDATED UNIFIED BOX) */
           <div className="p-3 border rounded-none bg-slate-500/5 border-slate-500/20 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -180,11 +392,10 @@ export const PropertiesWidget = ({
                       <label className="block text-[10px] font-bold uppercase mb-1">
                         Center Pos X (m)
                       </label>
-                      <input
-                        type="number"
-                        step="0.05"
+                      <BufferedNumberInput
+                        step={0.05}
                         value={getItemBoundsM(selectedItem).dist}
-                        onChange={(e) => updateItemProp('distance', e.target.value)}
+                        onChange={(val) => updateItemProp('distance', val)}
                         className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                         title="Component centerline coordinate along beam axis"
                       />
@@ -209,17 +420,13 @@ export const PropertiesWidget = ({
                             <RotateCcw size={10} />
                           </button>
                         </div>
-                        <input
-                          type="number"
-                          step="0.05"
-                          min="0.01"
+                        <BufferedNumberInput
+                          step={0.05}
+                          min={0.01}
                           value={selectedItem.physicalLength ?? selectedItem.length ?? (TYPES[selectedItem.type]?.defaultLength || 1.0)}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val)) {
-                              updateItemProp('physicalLength', val);
-                              updateItemProp('length', val);
-                            }
+                          onChange={(val) => {
+                            updateItemProp('physicalLength', val);
+                            updateItemProp('length', val);
                           }}
                           className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text} border-emerald-500/40`}
                           title="Physical length of the optics. Visualizes the optic body on the canvas. Does NOT change chamber footprint."
@@ -238,48 +445,102 @@ export const PropertiesWidget = ({
             })()}
 
             {/* Height Y and Offset Z */}
-            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-500/20">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-bold uppercase">Height Y (m)</label>
-                  <button
-                    type="button"
-                    onClick={() => updateItemProp('height', 0)}
-                    title="Reset height to 0"
-                    className="text-gray-400 hover:text-blue-500"
-                  >
-                    <RotateCcw size={10} />
-                  </button>
+            {(() => {
+              const isElevationEditable = ['SOURCE', 'DETECTOR'].includes(selectedItem.type);
+              const isDetectorInPath = selectedItem.type === 'DETECTOR' && selectedItem.stayInPath !== false;
+              const displayHeight = (isElevationEditable && !isDetectorInPath)
+                ? (selectedItem.height ?? 0)
+                : (selectedItem.y !== undefined ? parseFloat(((150 - selectedItem.y) / PX_PER_M).toFixed(3)) : (selectedItem.height ?? 0));
+              const displayOffset = (isElevationEditable && !isDetectorInPath)
+                ? (selectedItem.offset ?? 0)
+                : (selectedItem.z !== undefined ? parseFloat((((selectedItem.z) - 150) / PX_PER_M).toFixed(3)) : (selectedItem.offset ?? 0));
+
+              return (
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-500/20">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={`block text-[10px] font-bold uppercase ${!isElevationEditable ? 'opacity-60' : ''}`}>
+                        Height Y (m)
+                      </label>
+                      {isElevationEditable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedItem.type === 'DETECTOR') {
+                              updateItemProp('stayInPath', true);
+                            } else {
+                              updateItemProp('height', 0);
+                            }
+                          }}
+                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset height to 0"}
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
+                      )}
+                    </div>
+                    <BufferedNumberInput
+                      step={0.05}
+                      value={displayHeight}
+                      disabled={!isElevationEditable}
+                      onChange={(val) => {
+                        updateItemProp('height', val);
+                        if (selectedItem.type === 'DETECTOR') updateItemProp('stayInPath', false);
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${
+                        !isElevationEditable 
+                          ? 'opacity-60 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-gray-300 dark:border-slate-700' 
+                          : `${theme.buttonBg} ${theme.text}`
+                      }`}
+                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Elevation Height Y (m)"}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={`block text-[10px] font-bold uppercase ${!isElevationEditable ? 'opacity-60' : ''}`}>
+                        Offset Z (m)
+                      </label>
+                      {isElevationEditable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedItem.type === 'DETECTOR') {
+                              updateItemProp('stayInPath', true);
+                            } else {
+                              updateItemProp('offset', 0);
+                            }
+                          }}
+                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset offset to 0"}
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
+                      )}
+                    </div>
+                    <BufferedNumberInput
+                      step={0.05}
+                      value={displayOffset}
+                      disabled={!isElevationEditable}
+                      onChange={(val) => {
+                        updateItemProp('offset', val);
+                        if (selectedItem.type === 'DETECTOR') updateItemProp('stayInPath', false);
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${
+                        !isElevationEditable 
+                          ? 'opacity-60 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-gray-300 dark:border-slate-700' 
+                          : `${theme.buttonBg} ${theme.text}`
+                      }`}
+                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Lateral Offset Z (m)"}
+                    />
+                  </div>
+                  {!isElevationEditable && (
+                    <p className="col-span-2 text-[9px] opacity-60 italic leading-tight mt-0.5">
+                      * Height & Offset auto-calculated from beam path. Editable on Source & Detector only.
+                    </p>
+                  )}
                 </div>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={selectedItem.height ?? 0}
-                  onChange={(e) => updateItemProp('height', e.target.value)}
-                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-bold uppercase">Offset Z (m)</label>
-                  <button
-                    type="button"
-                    onClick={() => updateItemProp('offset', 0)}
-                    title="Reset offset to 0"
-                    className="text-gray-400 hover:text-blue-500"
-                  >
-                    <RotateCcw size={10} />
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={selectedItem.offset ?? 0}
-                  onChange={(e) => updateItemProp('offset', e.target.value)}
-                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                />
-              </div>
-            </div>
+              );
+            })()}
 
             {/* TYPE-SPECIFIC OPTICS PROPERTIES (CONSOLIDATED HERE) */}
 
@@ -302,19 +563,18 @@ export const PropertiesWidget = ({
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold uppercase mb-1">Period (mm)</label>
-                      <input
-                        type="number"
+                      <BufferedNumberInput
                         value={selectedItem.periodLength ?? (selectedItem.sourceType === 'Wiggler' ? 100 : 50)}
-                        onChange={(e) => updateItemProp('periodLength', parseFloat(e.target.value))}
+                        onChange={(val) => updateItemProp('periodLength', val)}
                         className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                       />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase mb-1">Num Periods</label>
-                      <input
-                        type="number"
+                      <BufferedNumberInput
+                        step={1}
                         value={selectedItem.numPeriods ?? (selectedItem.sourceType === 'Wiggler' ? 20 : 40)}
-                        onChange={(e) => updateItemProp('numPeriods', parseInt(e.target.value))}
+                        onChange={(val) => updateItemProp('numPeriods', parseInt(val) || 1)}
                         className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                       />
                     </div>
@@ -329,27 +589,19 @@ export const PropertiesWidget = ({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] font-bold uppercase mb-1">Exit Offset (m)</label>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <BufferedNumberInput
+                      step={0.01}
                       value={selectedItem.exitOffset !== undefined && selectedItem.exitOffset !== null ? selectedItem.exitOffset : 0.5}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateItemProp('exitOffset', val === '' ? '' : parseFloat(val));
-                      }}
+                      onChange={(val) => updateItemProp('exitOffset', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase mb-1">Bragg Angle (°)</label>
-                    <input
-                      type="number"
-                      step="0.1"
+                    <BufferedNumberInput
+                      step={0.1}
                       value={selectedItem.braggAngle !== undefined && selectedItem.braggAngle !== null ? selectedItem.braggAngle : 20}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateItemProp('braggAngle', val === '' ? '' : parseFloat(val));
-                      }}
+                      onChange={(val) => updateItemProp('braggAngle', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                     />
                   </div>
@@ -369,11 +621,11 @@ export const PropertiesWidget = ({
                         <RotateCcw size={10} />
                       </button>
                     </div>
-                    <input
-                      type="number"
-                      step="0.05"
+                    <BufferedNumberInput
+                      step={0.05}
+                      min={0.01}
                       value={selectedItem.crystal1Length ?? TYPES[selectedItem.type]?.defaultCrystal1Length ?? 1.0}
-                      onChange={(e) => updateItemProp('crystal1Length', parseFloat(e.target.value))}
+                      onChange={(val) => updateItemProp('crystal1Length', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                     />
                   </div>
@@ -389,11 +641,11 @@ export const PropertiesWidget = ({
                         <RotateCcw size={10} />
                       </button>
                     </div>
-                    <input
-                      type="number"
-                      step="0.05"
+                    <BufferedNumberInput
+                      step={0.05}
+                      min={0.01}
                       value={selectedItem.crystal2Length ?? TYPES[selectedItem.type]?.defaultCrystal2Length ?? 1.0}
-                      onChange={(e) => updateItemProp('crystal2Length', parseFloat(e.target.value))}
+                      onChange={(val) => updateItemProp('crystal2Length', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                     />
                   </div>
@@ -417,19 +669,19 @@ export const PropertiesWidget = ({
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Deflect Beam (°)</label>
-                  <input
-                    type="number"
+                  <BufferedNumberInput
+                    step={0.1}
                     value={selectedItem.diffractAngle ?? 15}
-                    onChange={(e) => updateItemProp('diffractAngle', parseFloat(e.target.value) || 0)}
+                    onChange={(val) => updateItemProp('diffractAngle', val)}
                     className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Fine Tilt Offset (°)</label>
-                  <input
-                    type="number"
+                  <BufferedNumberInput
+                    step={0.1}
                     value={selectedItem.tiltAngle ?? 0}
-                    onChange={(e) => updateItemProp('tiltAngle', parseFloat(e.target.value) || 0)}
+                    onChange={(val) => updateItemProp('tiltAngle', val)}
                     className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                   />
                 </div>
@@ -444,22 +696,20 @@ export const PropertiesWidget = ({
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-500/20">
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Grazing / Deflect (°)</label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <BufferedNumberInput
+                    step={0.01}
                     value={selectedItem.grazingAngle ?? selectedItem.deflectAngle ?? 0}
-                    onChange={(e) => updateItemProp('grazingAngle', parseFloat(e.target.value) || 0)}
+                    onChange={(val) => updateItemProp('grazingAngle', val)}
                     className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase mb-1">Focal Length (m)</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <BufferedNumberInput
+                    step={0.1}
                     value={selectedItem.focalLength ?? ''}
                     placeholder="e.g. 5.0"
-                    onChange={(e) => updateItemProp('focalLength', parseFloat(e.target.value) || '')}
+                    onChange={(val) => updateItemProp('focalLength', val)}
                     className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                   />
                 </div>
@@ -520,9 +770,9 @@ export const PropertiesWidget = ({
               </div>
             )}
 
-            {/* 7. CANVAS LABEL POSITION TRACKING */}
+            {/* 7. CANVAS LABEL POSITION TRACKING (4 NUMBERS: 2 FOR SIDE, 2 FOR TOP) */}
             <div className="pt-2 border-t border-slate-500/20">
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-2">
                 <label className="block text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400">
                   Canvas Label Tracking (px)
                 </label>
@@ -534,14 +784,13 @@ export const PropertiesWidget = ({
                       labelOffsetX: 0,
                       labelOffsetY: 0,
                       labelOffsets: {
-                        ...(selectedItem.labelOffsets || {}),
                         SIDE: { x: 0, y: 0 },
                         TOP: { x: 0, y: 0 }
                       }
                     };
                     setItems(prev => prev.map(i => i.id === selectedId ? updated : i));
                   }}
-                  title="Reset label offset positions to default"
+                  title="Reset label offset positions for both views to default (0, 0)"
                   className="flex items-center gap-1 text-[9px] font-bold text-gray-400 hover:text-blue-500 transition-colors"
                 >
                   <RotateCcw size={10} />
@@ -549,62 +798,79 @@ export const PropertiesWidget = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Offset X</span>
-                  <input
-                    type="number"
-                    step="1"
-                    value={currentLabelX}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelX', val, activeView) : i));
-                    }}
-                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                  />
+              {/* Side View (2 numbers) */}
+              <div className="mb-2 p-2 bg-slate-500/5 rounded border border-slate-500/10">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">
+                    Side View
+                  </span>
+                  <span className="text-[9px] opacity-60">X & Y Offset</span>
                 </div>
-                <div>
-                  <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Offset Y</span>
-                  <input
-                    type="number"
-                    step="1"
-                    value={currentLabelY}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelY', val, activeView) : i));
-                    }}
-                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Side X (px)</span>
+                    <BufferedNumberInput
+                      step={1}
+                      value={sideLabelX}
+                      onChange={(val) => {
+                        setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelSideX', val) : i));
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Side Y (px)</span>
+                    <BufferedNumberInput
+                      step={1}
+                      value={sideLabelY}
+                      onChange={(val) => {
+                        setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelSideY', val) : i));
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    />
+                  </div>
                 </div>
               </div>
-              <p className="text-[9px] opacity-60 mt-1 italic leading-tight">
-                * Tracked & saved to CSV/Table. Preserves custom visual label positioning on reload.
+
+              {/* Top View (2 numbers) */}
+              <div className="p-2 bg-slate-500/5 rounded border border-slate-500/10">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400">
+                    Top View
+                  </span>
+                  <span className="text-[9px] opacity-60">X & Y Offset</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Top X (px)</span>
+                    <BufferedNumberInput
+                      step={1}
+                      value={topLabelX}
+                      onChange={(val) => {
+                        setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelTopX', val) : i));
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-semibold opacity-70 mb-0.5">Top Y (px)</span>
+                    <BufferedNumberInput
+                      step={1}
+                      value={topLabelY}
+                      onChange={(val) => {
+                        setItems(prev => prev.map(i => i.id === selectedId ? setItemMiscParam(i, 'labelTopY', val) : i));
+                      }}
+                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[9px] opacity-60 mt-1.5 italic leading-tight">
+                * 4 tracked values (2 for Side View, 2 for Top View) saved independently and exported to CSV/JSON.
               </p>
             </div>
 
-          </div>
-        ) : (
-          /* Enclosure / Wall position */
-          <div className="p-2.5 border rounded-none bg-slate-500/5 border-slate-500/20 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-[10px] font-bold uppercase mb-1">Center Distance X (m)</label>
-              <button
-                type="button"
-                onClick={() => updateItemProp('distance', 0)}
-                title="Reset position to 0m"
-                className="flex items-center gap-1 text-[9px] font-bold text-gray-400 hover:text-blue-500 transition-colors"
-              >
-                <RotateCcw size={10} />
-                <span>Reset (0m)</span>
-              </button>
-            </div>
-            <input
-              type="number"
-              step="0.05"
-              value={getItemBoundsM(selectedItem).dist}
-              onChange={(e) => updateItemProp('distance', e.target.value)}
-              className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-            />
           </div>
         )}
 
@@ -623,13 +889,7 @@ export const PropertiesWidget = ({
                   const center = bounds.center ?? bounds.dist;
                   let defaultChamberL;
                   if (isDCM) {
-                    const parsedD = parseFloat(selectedItem.exitOffset);
-                    const d_m = !isNaN(parsedD) ? parsedD : 0.5;
-                    const parsedTh = parseFloat(selectedItem.braggAngle);
-                    const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
-                    const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
-                    const L_m = Math.abs(tan2th) > 0.001 ? Math.abs(d_m / tan2th) : 2.0;
-                    defaultChamberL = parseFloat((L_m + 1.2).toFixed(3));
+                    defaultChamberL = 1.5;
                   } else {
                     const physL = selectedItem.physicalLength ?? selectedItem.length ?? (TYPES[selectedItem.type]?.defaultLength || 1.0);
                     defaultChamberL = parseFloat((physL + 0.6).toFixed(3));
@@ -730,11 +990,10 @@ export const PropertiesWidget = ({
                 <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
                   Upstream X₁ (m)
                 </label>
-                <input
-                  type="number"
-                  step="0.05"
+                <BufferedNumberInput
+                  step={0.05}
                   value={getItemBoundsM(selectedItem).start}
-                  onChange={(e) => updateItemProp('start', e.target.value)}
+                  onChange={(val) => updateItemProp('start', val)}
                   className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                   title="Upstream chamber entrance face coordinate"
                 />
@@ -743,11 +1002,10 @@ export const PropertiesWidget = ({
                 <label className="block text-[10px] font-bold uppercase mb-1 text-blue-600 dark:text-blue-400">
                   Downstream X₂ (m)
                 </label>
-                <input
-                  type="number"
-                  step="0.05"
+                <BufferedNumberInput
+                  step={0.05}
                   value={getItemBoundsM(selectedItem).end}
-                  onChange={(e) => updateItemProp('end', e.target.value)}
+                  onChange={(val) => updateItemProp('end', val)}
                   className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                   title="Downstream chamber exit face coordinate"
                 />
@@ -764,12 +1022,11 @@ export const PropertiesWidget = ({
                   Span: {getItemBoundsM(selectedItem).len} m
                 </span>
               </div>
-              <input
-                type="number"
-                step="0.05"
-                min="0.05"
+              <BufferedNumberInput
+                step={0.05}
+                min={0.05}
                 value={getItemBoundsM(selectedItem).len}
-                onChange={(e) => updateItemProp('chamberLength', e.target.value)}
+                onChange={(val) => updateItemProp('chamberLength', val)}
                 className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                 title="Total length of the chamber envelope along the beamline"
               />
@@ -777,25 +1034,21 @@ export const PropertiesWidget = ({
           </div>
         )}
 
-        {['HUTCH', 'WALL', 'CHAMBER'].includes(selectedItem.type) && (
+        {selectedItem.type === 'CHAMBER' && (
           <div>
             <label className="block text-[10px] font-bold uppercase mb-1 text-blue-500">Construction Height / Width (m)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={selectedItem.height ?? (TYPES[selectedItem.type].height / PX_PER_M)}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
+            <BufferedNumberInput
+              step={0.1}
+              value={selectedItem.height ?? (TYPES[selectedItem.type]?.height / PX_PER_M)}
+              onChange={(val) => {
                 setItems(items.map(i => {
                   if (i.id === selectedId) {
                      const h = isNaN(val) ? 0 : val;
-                     const isChamber = i.type === 'CHAMBER';
                      return { 
                        ...i, 
                        height: h, 
                        dimY: h * PX_PER_M, 
-                       dimZ: h * PX_PER_M,
-                       y: isChamber ? i.y : 200 - (h * PX_PER_M) / 2
+                       dimZ: h * PX_PER_M
                      };
                   }
                   return i;
@@ -823,7 +1076,13 @@ export const PropertiesWidget = ({
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Ray Width</label>
-                <input type="number" step="0.5" value={selectedItem.rayWidth ?? 1.5} onChange={(e) => updateItemProp('rayWidth', parseFloat(e.target.value))} className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`} />
+                <BufferedNumberInput
+                  step={0.5}
+                  min={0.5}
+                  value={selectedItem.rayWidth ?? 1.5}
+                  onChange={(val) => updateItemProp('rayWidth', val)}
+                  className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase mb-1">Line Style</label>

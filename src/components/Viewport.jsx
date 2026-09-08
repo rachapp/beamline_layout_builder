@@ -1,18 +1,143 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
-import { getOpticPhysicalLengthM, getItemBoundsM } from '../utils/constructionUtils';
+import { getOpticPhysicalLengthM, getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
   draggingInfo, placingType, pan, zoom, showGrid, showRuler, showAnnotations = true, canvasWidth, 
-  isDarkMode, computedItems, selectedId, editingLabel, rayColor, 
+  isDarkMode, computedItems, selectedId, setSelectedId, editingLabel, rayColor, 
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
   handleResizePointerDown, handleLabelPointerDown, handleLabelDoubleClick,
-  setEditingLabel, setItems, ghostPos, canvasSettings
+  cancelFocusItem, setEditingLabel, setItems, ghostPos, canvasSettings
 }) => {
+  const [editingAnnotation, setEditingAnnotation] = useState(null); // { id, text, posX, badgeY }
+  const lastAnnotClickRef = useRef({});
+  const lastLabelClickRef = useRef({});
+  const lastCompClickRef = useRef({});
+  const annotOpenTimeRef = useRef(0);
+  const labelOpenTimeRef = useRef(0);
+  const hasSelectedAnnotRef = useRef(false);
+  const hasSelectedLabelRef = useRef(false);
+
+  const annotInputRef = (el) => {
+    if (el && !hasSelectedAnnotRef.current) {
+      hasSelectedAnnotRef.current = true;
+      el.focus();
+      el.select();
+    }
+  };
+
+  const labelInputRef = (el) => {
+    if (el && !hasSelectedLabelRef.current) {
+      hasSelectedLabelRef.current = true;
+      el.focus();
+      el.select();
+    }
+  };
+
+  const startEditingAnnotation = (e, item, posX, badgeY) => {
+    e?.stopPropagation?.();
+    cancelFocusItem?.();
+    setEditingLabel?.(null);
+    hasSelectedAnnotRef.current = false;
+    annotOpenTimeRef.current = Date.now();
+    setSelectedId?.(item.id);
+    const distVal = item.distance !== undefined ? item.distance : (posX - ORIGIN_X) / PX_PER_M;
+    setEditingAnnotation({
+      id: item.id,
+      text: String(parseFloat(Number(distVal).toFixed(3))),
+      posX,
+      badgeY
+    });
+  };
+
+  const commitAnnotationEdit = () => {
+    if (!editingAnnotation) return;
+    const cleanStr = String(editingAnnotation.text).replace(/m$/i, '').trim();
+    const num = parseFloat(cleanStr);
+    if (!isNaN(num)) {
+      setItems(prev => prev.map(i => {
+        if (i.id === editingAnnotation.id) {
+          const constraint = i.lockLength ? 'LOCK_LENGTH' : (i.lockCenter ? 'LOCK_CENTER' : 'ADJUST_LENGTH');
+          return calculateUpdatedBounds(i, 'distance', num, constraint);
+        }
+        return i;
+      }).sort((a, b) => (a.distance || 0) - (b.distance || 0)));
+    }
+    setEditingAnnotation(null);
+    hasSelectedAnnotRef.current = false;
+  };
+
+  // Pre-calculate stagger layout for annotations
+  const layoutItems = React.useMemo(() => {
+    if (!showAnnotations) return [];
+    const candidateItems = (computedItems || []).filter(
+      (item) => !item.isBranchHidden && !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)
+    );
+
+    const sortedAnnotations = candidateItems.map((item) => {
+      const isSelected = selectedId === item.id;
+      const elemY = viewType === 'SIDE' ? item.y : item.z;
+      const itemH = viewType === 'SIDE'
+        ? (item.dimY ?? TYPES[item.type]?.height ?? 20)
+        : (item.dimZ ?? TYPES[item.type]?.height ?? 20);
+      const targetY = elemY > 65 ? (elemY - itemH / 2) : (elemY + itemH / 2);
+
+      const posX = item.x;
+      const distVal = item.distance !== undefined
+        ? item.distance
+        : (posX - ORIGIN_X) / PX_PER_M;
+      const labelText = `${parseFloat(Number(distVal).toFixed(2))}m`;
+      const annotSize = canvasSettings?.annotationTextSize || 9;
+      const badgeWidth = Math.max(34, labelText.length * (annotSize * 0.7) + 8);
+      const badgeHeight = annotSize + 6;
+
+      return {
+        item,
+        isSelected,
+        elemY,
+        itemH,
+        targetY,
+        posX,
+        labelText,
+        badgeWidth,
+        badgeHeight,
+        annotSize,
+        left: posX - badgeWidth / 2,
+        right: posX + badgeWidth / 2
+      };
+    }).sort((a, b) => a.posX - b.posX);
+
+    const levelEndPositions = [];
+    const minGap = 6;
+
+    return sortedAnnotations.map((annot) => {
+      let assignedLevel = -1;
+      for (let lvl = 0; lvl < levelEndPositions.length; lvl++) {
+        if (annot.left >= levelEndPositions[lvl] + minGap) {
+          assignedLevel = lvl;
+          break;
+        }
+      }
+
+      if (assignedLevel === -1) {
+        assignedLevel = levelEndPositions.length;
+        levelEndPositions.push(annot.right);
+      } else {
+        levelEndPositions[assignedLevel] = annot.right;
+      }
+
+      const stepY = (annot.badgeHeight || 15) + 3;
+      const badgeBottom = 38 - assignedLevel * stepY;
+      const badgeY = badgeBottom - (annot.badgeHeight || 15);
+
+      return { ...annot, level: assignedLevel, badgeBottom, badgeY };
+    });
+  }, [showAnnotations, computedItems, selectedId, viewType, canvasSettings]);
+
   const isPanning = draggingInfo?.type === 'pan' && draggingInfo?.view === viewType;
 
   let strokeDasharray = 'none';
@@ -32,21 +157,27 @@ export const Viewport = ({
         style={{ backgroundColor: theme.canvasBg }} 
         onPointerDown={(e) => {
           if (e.button === 0) {
-            e.currentTarget.setPointerCapture?.(e.pointerId);
+            try {
+              e.currentTarget.setPointerCapture?.(e.pointerId);
+            } catch (err) {}
           }
           handleBgPointerDown(e, viewType);
         }}
         onPointerMove={(e) => handlePointerMove(e, viewType, refObj)}
         onPointerUp={(e) => {
-          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-            e.currentTarget.releasePointerCapture?.(e.pointerId);
-          }
+          try {
+            if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+              e.currentTarget.releasePointerCapture?.(e.pointerId);
+            }
+          } catch (err) {}
           handlePointerUp();
         }}
         onPointerCancel={(e) => {
-          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-            e.currentTarget.releasePointerCapture?.(e.pointerId);
-          }
+          try {
+            if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+              e.currentTarget.releasePointerCapture?.(e.pointerId);
+            }
+          } catch (err) {}
           handlePointerUp();
         }}
         onWheel={(e) => handleWheel(e, viewType, scrollRef)}
@@ -66,7 +197,20 @@ export const Viewport = ({
             backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`
           }} />
 
-          <svg style={{ position: 'absolute', overflow: 'visible', zIndex: 10 }}>
+          <svg 
+            width={canvasWidth || 50000} 
+            height={1000}
+            style={{ 
+              position: 'absolute', 
+              left: 0, 
+              top: 0, 
+              width: `${canvasWidth || 50000}px`, 
+              height: '1000px', 
+              overflow: 'visible', 
+              zIndex: 35, 
+              pointerEvents: 'none' 
+            }}
+          >
             <defs>
               <marker id={`arrowhead-${viewType}`} markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
                 <polygon points="0 0, 8 3, 0 6" fill={rayColor} />
@@ -87,7 +231,7 @@ export const Viewport = ({
 
             {showRuler && (
               <g className="ruler-layer">
-                <line x1="0" y1="65" x2={canvasWidth} y2="65" stroke={isDarkMode ? '#475569' : '#94a3b8'} strokeWidth="2" />
+                <line x1="0" y1="65" x2={canvasWidth} y2="65" stroke={isDarkMode ? '#334155' : '#cbd5e1'} strokeWidth="1.5" />
                 {(() => {
                   const maxMeters = Math.ceil(canvasWidth / PX_PER_M);
                   const ticks = [];
@@ -100,13 +244,13 @@ export const Viewport = ({
                         <line 
                           x1={x} y1="65" 
                           x2={x} y2={isMajor ? "55" : "60"} 
-                          stroke={isDarkMode ? '#475569' : '#94a3b8'} 
-                          strokeWidth={isMajor ? "2" : "1"} 
+                          stroke={isDarkMode ? '#334155' : '#cbd5e1'} 
+                          strokeWidth={isMajor ? "1.5" : "1"} 
                         />
                         {isMajor && (
                           <text 
                             x={x} y="52" 
-                            fill={isDarkMode ? '#94a3b8' : '#64748b'} 
+                            fill={isDarkMode ? '#94a3b8' : '#475569'} 
                             fontSize={canvasSettings?.rulerTextSize || 10} 
                             fontFamily="sans-serif" 
                             fontWeight="bold" 
@@ -123,146 +267,72 @@ export const Viewport = ({
               </g>
             )}
 
-            {showAnnotations && (() => {
-              // Pass 1: Compute annotation data for each item
-              const candidateItems = (computedItems || []).filter(
-                (item) => !item.isBranchHidden && !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)
-              );
+            {showAnnotations && (
+              <g className="annotations-lines-layer">
+                {layoutItems.map((annot) => {
+                  const { item, isSelected, targetY, posX, badgeBottom, badgeY } = annot;
+                  const strokeColor = isSelected ? '#3b82f6' : (isDarkMode ? '#475569' : '#cbd5e1');
+                  return (
+                    <g key={`annotation-lines-${item.id}`} opacity={isSelected ? 1 : 0.75}>
+                      {/* Invisible wider hit-testing line for easy double-click on leader line */}
+                      <line
+                        x1={posX} y1={targetY}
+                        x2={posX} y2={badgeBottom}
+                        stroke="transparent"
+                        strokeWidth="16"
+                        className="cursor-pointer"
+                        style={{ pointerEvents: 'stroke' }}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          cancelFocusItem?.();
+                          const now = Date.now();
+                          const lastClick = lastAnnotClickRef.current[item.id] || 0;
+                          if (now - lastClick < 500) {
+                            lastAnnotClickRef.current[item.id] = 0;
+                            startEditingAnnotation(e, item, posX, badgeY);
+                            return;
+                          }
+                          lastAnnotClickRef.current[item.id] = now;
+                          setSelectedId?.(item.id);
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          cancelFocusItem?.();
+                          startEditingAnnotation(e, item, posX, badgeY);
+                        }}
+                      />
 
-              const sortedAnnotations = candidateItems.map((item) => {
-                const isSelected = selectedId === item.id;
-                const elemY = viewType === 'SIDE' ? item.y : item.z;
-                const itemH = viewType === 'SIDE'
-                  ? (item.dimY ?? TYPES[item.type]?.height ?? 20)
-                  : (item.dimZ ?? TYPES[item.type]?.height ?? 20);
-                // Push targetY toward the ruler (y=65) from the element centre
-                const targetY = elemY > 65 ? (elemY - itemH / 2) : (elemY + itemH / 2);
+                      {/* 1. Dashed vertical leader line: element centre → badge bottom */}
+                      <line
+                        x1={posX} y1={targetY}
+                        x2={posX} y2={badgeBottom}
+                        stroke={strokeColor}
+                        strokeWidth={isSelected ? "1.5" : "1"}
+                        strokeDasharray="2,2"
+                        style={{ pointerEvents: 'none' }}
+                      />
 
-                // Point elements
-                const posX = item.x;
-                const distVal = item.distance !== undefined
-                  ? item.distance
-                  : (posX - ORIGIN_X) / PX_PER_M;
-                const labelText = `${parseFloat(Number(distVal).toFixed(2))}m`;
-                const annotSize = canvasSettings?.annotationTextSize || 9;
-                const badgeWidth = Math.max(34, labelText.length * (annotSize * 0.7) + 8);
-                const badgeHeight = annotSize + 6;
+                      {/* 2. Tick mark on the ruler baseline */}
+                      <line
+                        x1={posX - 2.5} y1="65"
+                        x2={posX + 2.5} y2="65"
+                        stroke={strokeColor} 
+                        strokeWidth={isSelected ? "1.5" : "1"}
+                        style={{ pointerEvents: 'none' }}
+                      />
 
-                return {
-                  item,
-                  isSelected,
-                  elemY,
-                  itemH,
-                  targetY,
-                  posX,
-                  labelText,
-                  badgeWidth,
-                  badgeHeight,
-                  annotSize,
-                  left: posX - badgeWidth / 2,
-                  right: posX + badgeWidth / 2
-                };
-              }).sort((a, b) => a.posX - b.posX);
-
-              // Pass 2: Greedy stagger layout (non-overlapping levels)
-              const levelEndPositions = [];  // tracks rightmost x used on each level
-              const minGap = 6;              // minimum horizontal gap between badges (px)
-
-              const layoutItems = sortedAnnotations.map((annot) => {
-                let assignedLevel = -1;
-
-                // Find the lowest existing level where this badge fits
-                for (let lvl = 0; lvl < levelEndPositions.length; lvl++) {
-                  if (annot.left >= levelEndPositions[lvl] + minGap) {
-                    assignedLevel = lvl;
-                    break;
-                  }
-                }
-
-                if (assignedLevel === -1) {
-                  // No level fits — open a new one
-                  assignedLevel = levelEndPositions.length;
-                  levelEndPositions.push(annot.right);
-                } else {
-                  levelEndPositions[assignedLevel] = annot.right;
-                }
-
-                // Vertical positions
-                const stepY = (annot.badgeHeight || 15) + 3;
-                const badgeBottom = 38 - assignedLevel * stepY;
-                const badgeY      = badgeBottom - (annot.badgeHeight || 15);
-
-                return { ...annot, level: assignedLevel, badgeBottom, badgeY };
-              });
-
-              // Pass 3: Render SVG elements
-              return (
-                <g className="annotations-layer" style={{ pointerEvents: 'none' }}>
-                  {layoutItems.map((annot) => {
-                    const { item, isSelected, targetY, posX, labelText, badgeWidth, badgeBottom, badgeY } = annot;
-                    const strokeColor = isSelected ? '#3b82f6' : (isDarkMode ? '#64748b' : '#94a3b8');
-                    const badgeBorder = isSelected ? '#3b82f6' : (isDarkMode ? '#475569' : '#cbd5e1');
-                    const badgeBg     = isDarkMode ? '#0f172a' : '#ffffff';
-                    const textColor   = isSelected
-                      ? (isDarkMode ? '#60a5fa' : '#2563eb')
-                      : (isDarkMode ? '#94a3b8' : '#475569');
-
-                    return (
-                      <g key={`annotation-${item.id}`} opacity={isSelected ? 1 : 0.85}>
-                        {/* 1. Dashed vertical leader line: element centre → badge bottom */}
-                        <line
-                          x1={posX} y1={targetY}
-                          x2={posX} y2={badgeBottom}
-                          stroke={strokeColor}
-                          strokeWidth={isSelected ? "1.5" : "1"}
-                          strokeDasharray="2,2"
-                        />
-
-                        {/* 2. Tick mark on the ruler baseline */}
-                        <line
-                          x1={posX - 3} y1="65"
-                          x2={posX + 3} y2="65"
-                          stroke={strokeColor} strokeWidth="2"
-                        />
-
-                        {/* 3. Dot at the element's touch point */}
-                        <circle
-                          cx={posX} cy={targetY}
-                          r={isSelected ? "2.5" : "2"}
-                          fill={strokeColor}
-                        />
-
-                        {/* 4. Badge rectangle */}
-                        <rect
-                          x={posX - badgeWidth / 2}
-                          y={badgeY}
-                          width={badgeWidth}
-                          height={annot.badgeHeight || 15}
-                          rx="3"
-                          fill={badgeBg}
-                          stroke={badgeBorder}
-                          strokeWidth="1"
-                          opacity="0.95"
-                        />
-
-                        {/* 5. Distance label text */}
-                        <text
-                          x={posX}
-                          y={badgeY + (annot.annotSize || 9) + 2}
-                          fill={textColor}
-                          fontSize={annot.annotSize || 9}
-                          fontFamily="sans-serif"
-                          fontWeight="bold"
-                          textAnchor="middle"
-                        >
-                          {labelText}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </g>
-              );
-            })()}
+                      {/* 3. Dot at the element's touch point */}
+                      <circle
+                        cx={posX} cy={targetY}
+                        r={isSelected ? "2.5" : "1.5"}
+                        fill={strokeColor}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
             {tracePoints.length > 1 && (
               <path
@@ -284,16 +354,133 @@ export const Viewport = ({
             })}
           </svg>
 
+          {/* HTML ANNOTATION BADGES & INLINE EDIT OVERLAYS */}
+          {showAnnotations && (
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 45 }}>
+              {layoutItems.map((annot) => {
+                const { item, isSelected, posX, labelText, badgeWidth, badgeHeight, badgeY } = annot;
+                const isEditingThis = editingAnnotation?.id === item.id;
+
+                if (isEditingThis) {
+                  return (
+                    <div
+                      key={`annot-edit-${item.id}`}
+                      className="absolute pointer-events-auto z-[60]"
+                      style={{
+                        left: `${posX}px`,
+                        top: `${badgeY}px`,
+                        transform: 'translate(-50%, -2px)',
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        ref={annotInputRef}
+                        type="text"
+                        value={editingAnnotation.text}
+                        onChange={(e) => setEditingAnnotation(prev => prev ? { ...prev, text: e.target.value } : null)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                        onBlur={(e) => {
+                          if (Date.now() - annotOpenTimeRef.current < 300) {
+                            e.target.focus();
+                            return;
+                          }
+                          commitAnnotationEdit();
+                        }}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') {
+                            commitAnnotationEdit();
+                          } else if (e.key === 'Escape') {
+                            setEditingAnnotation(null);
+                            hasSelectedAnnotRef.current = false;
+                          }
+                        }}
+                        onKeyUp={(e) => e.stopPropagation()}
+                        className="px-2 py-0.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-2 border-blue-500 rounded shadow-lg outline-none select-text ring-2 ring-blue-400/40"
+                        style={{
+                          width: `${Math.max(68, ((editingAnnotation.text || '').length + 3) * 8.5)}px`,
+                          height: '24px'
+                        }}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={`annot-badge-${item.id}`}
+                    className={`absolute pointer-events-auto cursor-pointer select-none px-1.5 py-0 rounded text-center font-mono font-bold transition-all ${
+                      isSelected
+                        ? 'bg-blue-500/15 border border-blue-500 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-blue-500/30 z-[48]'
+                        : 'bg-transparent border border-transparent hover:text-blue-500 hover:border-blue-400/40 hover:bg-blue-500/10 z-[36]'
+                    }`}
+                    style={{
+                      left: `${posX}px`,
+                      top: `${badgeY}px`,
+                      transform: 'translate(-50%, 0)',
+                      fontSize: `${annot.annotSize || 9}px`,
+                      height: `${badgeHeight}px`,
+                      lineHeight: `${badgeHeight - 2}px`,
+                      minWidth: `${badgeWidth}px`,
+                      whiteSpace: 'nowrap',
+                      color: isSelected 
+                        ? (isDarkMode ? '#60a5fa' : '#2563eb')
+                        : (isDarkMode ? '#cbd5e1' : '#1e293b'),
+                      textShadow: isDarkMode 
+                        ? '0 1px 2px rgba(0,0,0,0.8)' 
+                        : '0 1px 1px rgba(255,255,255,0.8)'
+                    }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      cancelFocusItem?.();
+                      const now = Date.now();
+                      const lastClick = lastAnnotClickRef.current[item.id] || 0;
+                      if (now - lastClick < 500) {
+                        lastAnnotClickRef.current[item.id] = 0;
+                        startEditingAnnotation(e, item, posX, badgeY);
+                        return;
+                      }
+                      lastAnnotClickRef.current[item.id] = now;
+                      setSelectedId?.(item.id);
+                    }}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      cancelFocusItem?.();
+                      startEditingAnnotation(e, item, posX, badgeY);
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedId?.(item.id);
+                    }}
+                  >
+                    {labelText}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div 
             ref={refObj} 
-            className="absolute inset-0" 
+            className="absolute inset-0 pointer-events-none" 
             style={{ width: `${canvasWidth}px`, height: '1000px' }}
           >
             {computedItems.map((item) => {
               const conf = TYPES[item.type];
               const isSelected = selectedId === item.id;
               const isDraggingThis = draggingInfo?.id === item.id && draggingInfo.type === 'component';
-              const isEditing = editingLabel?.id === item.id;
+              const isEditing = editingLabel?.id === item.id && (!editingLabel.view || editingLabel.view === viewType);
               
               const isGratingActive = item.type === 'GRATING' && ((viewType === 'SIDE' && (item.orientation || 'Vertical') === 'Vertical') || (viewType === 'TOP' && item.orientation === 'Horizontal'));
               const isSimpleMirrorActive = (item.type === 'VFM' && viewType === 'SIDE') || (item.type === 'HFM' && viewType === 'TOP') || isGratingActive;
@@ -309,11 +496,12 @@ export const Viewport = ({
               // Physical length visualizes the optics itself on the canvas!
               // Range elements (WALL/HUTCH/CHAMBER) scale with their span.
               // SOURCE scales with its physical length.
-              // DCM scales with its housing / crystal span (dimX).
-              // All optical components scale with their physical length (min 6px).
-              const itemW = (isRange || isSource || isDCM)
-                ? (item.dimX ?? conf.width)
-                : Math.max(6, physLengthM * PX_PER_M);
+              // DCM display box matches chamber/footprint box size:
+              const itemW = isDCM
+                ? Math.max(4, bounds.len * PX_PER_M)
+                : ((isRange || isSource)
+                  ? (item.dimX ?? conf.width)
+                  : Math.max(6, physLengthM * PX_PER_M));
               const itemH = item.type === 'XBPM' 
                 ? conf.height 
                 : (viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height));
@@ -323,19 +511,12 @@ export const Viewport = ({
               const showFootprintBox = !isRange && Boolean(item.showFootprint) && globalShowFootprints;
               const showFootprintText = item.showFootprintText !== false && canvasSettings?.showFootprintText !== false;
               const footprintW = Math.max(4, bounds.len * PX_PER_M);
-              const footprintH = Math.max(itemH + 14, 28);
+              const footprintH = isDCM ? itemH : Math.max(itemH + 14, 28);
               // Asymmetric chamber offset from optic center
               const deltaBoxPx = isSource ? 0 : (((bounds.start + bounds.end) / 2) - bounds.dist) * PX_PER_M;
               let chamberBoxTop = 0;
               if (isSimpleMirrorActive) {
                 chamberBoxTop = itemH / 2;
-              } else if (isDCM) {
-                const isDCMActivePlane = (item.type === 'VDCM' && viewType === 'SIDE') || (item.type === 'HDCM' && viewType === 'TOP');
-                if (isDCMActivePlane) {
-                  const parsedOffset = parseFloat(item.exitOffset);
-                  const offset_m = !isNaN(parsedOffset) ? parsedOffset : 0.5;
-                  chamberBoxTop = (offset_m * PX_PER_M) / 2;
-                }
               }
 
               let rotation = 0;
@@ -357,7 +538,7 @@ export const Viewport = ({
                   }
               }
 
-              let dcmAnchorX = 40;
+              let dcmAnchorX = 0;
               if (isDCM) {
                 const parsedD = parseFloat(item.exitOffset);
                 const d_m = !isNaN(parsedD) ? parsedD : 0.5;
@@ -365,7 +546,7 @@ export const Viewport = ({
                 const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
                 const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
                 const L = Math.abs(tan2th) > 0.001 ? Math.abs((d_m * PX_PER_M) / tan2th) : 40;
-                dcmAnchorX = Math.max(10, (itemW - L) / 2);
+                dcmAnchorX = (itemW - L) / 2;
               }
               let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? `${dcmAnchorX}px 50%` : '50% 50%');
               let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? `translate(-${dcmAnchorX}px, -50%)` : 'translate(-50%, -50%)');
@@ -414,7 +595,7 @@ export const Viewport = ({
               return (
                 <div
                   key={item.id}
-                  className={`absolute ${zIndexClass}`}
+                  className={`absolute ${zIndexClass} pointer-events-auto`}
                   style={{
                     left: item.x,
                     top: item[planeCoord],
@@ -460,25 +641,46 @@ export const Viewport = ({
 
                   <div
                     onPointerDown={(e) => {
+                      e.stopPropagation();
+                      if (isEditing) return;
                       if (e.button === 0) {
-                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                        try {
+                          e.currentTarget.setPointerCapture?.(e.pointerId);
+                        } catch (err) {}
                       }
                       handlePointerDown(e, item.id, viewType, refObj);
                     }}
+                    onPointerMove={(e) => {
+                      handlePointerMove(e, viewType, refObj);
+                    }}
                     onPointerUp={(e) => {
-                      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                        e.currentTarget.releasePointerCapture?.(e.pointerId);
-                      }
+                      try {
+                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                          e.currentTarget.releasePointerCapture?.(e.pointerId);
+                        }
+                      } catch (err) {}
+                      if (isEditing) return;
                       handlePointerUp();
                     }}
                     onPointerCancel={(e) => {
-                      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                        e.currentTarget.releasePointerCapture?.(e.pointerId);
-                      }
+                      try {
+                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                          e.currentTarget.releasePointerCapture?.(e.pointerId);
+                        }
+                      } catch (err) {}
+                      if (isEditing) return;
                       handlePointerUp();
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className={`absolute ${placingType ? 'pointer-events-none' : (item.isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing')} ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-400 hover:ring-offset-1'}`}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      cancelFocusItem?.();
+                      setEditingAnnotation(null);
+                      hasSelectedLabelRef.current = false;
+                      labelOpenTimeRef.current = Date.now();
+                      handleLabelDoubleClick(e, item.id, labelName, viewType);
+                    }}
+                    className={`absolute before:absolute before:-inset-3 before:content-[''] select-none ${placingType ? 'pointer-events-none' : (item.isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing')} ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-400 hover:ring-offset-1'}`}
                     style={{
                       width: itemW,
                       height: itemH,
@@ -487,7 +689,9 @@ export const Viewport = ({
                       transition: isDraggingThis ? 'none' : 'transform 0.1s ease-out, width 0.1s ease-out, height 0.1s ease-out'
                     }}
                   >
-                    <OpticalComponent item={item} itemW={itemW} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
+                    <div className="w-full h-full pointer-events-none relative z-10">
+                      <OpticalComponent item={item} itemW={itemW} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
+                    </div>
                     
                     {isSelected && ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && (
                       <div 
@@ -495,20 +699,26 @@ export const Viewport = ({
                         style={resizeHandlePos}
                         onPointerDown={(e) => {
                           if (e.button === 0) {
-                            e.currentTarget.setPointerCapture?.(e.pointerId);
+                            try {
+                              e.currentTarget.setPointerCapture?.(e.pointerId);
+                            } catch (err) {}
                           }
                           handleResizePointerDown(e, item.id, viewType);
                         }}
                         onPointerUp={(e) => {
-                          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                            e.currentTarget.releasePointerCapture?.(e.pointerId);
-                          }
+                          try {
+                            if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                              e.currentTarget.releasePointerCapture?.(e.pointerId);
+                            }
+                          } catch (err) {}
                           handlePointerUp();
                         }}
                         onPointerCancel={(e) => {
-                          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                            e.currentTarget.releasePointerCapture?.(e.pointerId);
-                          }
+                          try {
+                            if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                              e.currentTarget.releasePointerCapture?.(e.pointerId);
+                            }
+                          } catch (err) {}
                           handlePointerUp();
                         }}
                         onClick={(e) => e.stopPropagation()}
@@ -518,64 +728,95 @@ export const Viewport = ({
 
                   {labelVisible && (
                     <div 
-                      className={`absolute whitespace-nowrap px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-30 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
+                      className={`absolute whitespace-nowrap px-1 py-0.5 pointer-events-auto transition-opacity ${isEditing ? 'z-50 cursor-text' : 'z-20 cursor-grab active:cursor-grabbing hover:text-blue-500'} ${placingType ? 'pointer-events-none' : ''}`}
                       style={{ 
                         transform: 'translateX(-50%)',
                         left: labelOffsetX,
                         top: labelOffsetY,
                         fontSize: `${canvasSettings?.textSize || 10}px`,
                         fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
-                        color: isDarkMode ? '#cbd5e1' : '#334155',
-                        textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
+                        color: isDarkMode ? '#cbd5e1' : '#1e293b',
+                        textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 1px rgba(255,255,255,0.8)'
                       }}
                       onPointerDown={(e) => {
+                        e.stopPropagation();
                         if (isEditing) {
-                          e.stopPropagation();
-                        } else {
-                          if (e.button === 0) {
-                            e.currentTarget.setPointerCapture?.(e.pointerId);
-                          }
-                          handleLabelPointerDown(e, item.id, viewType);
+                          return;
                         }
+                        const now = Date.now();
+                        const lastClick = lastLabelClickRef.current[item.id] || 0;
+                        if (now - lastClick < 500) {
+                          lastLabelClickRef.current[item.id] = 0;
+                          cancelFocusItem?.();
+                          setEditingAnnotation(null);
+                          hasSelectedLabelRef.current = false;
+                          labelOpenTimeRef.current = Date.now();
+                          handleLabelDoubleClick(e, item.id, labelName, viewType);
+                          return;
+                        }
+                        lastLabelClickRef.current[item.id] = now;
+                        handleLabelPointerDown(e, item.id, viewType);
                       }}
                       onPointerUp={(e) => {
-                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                          e.currentTarget.releasePointerCapture?.(e.pointerId);
-                        }
+                        if (isEditing) return;
                         handlePointerUp();
                       }}
                       onPointerCancel={(e) => {
-                        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                          e.currentTarget.releasePointerCapture?.(e.pointerId);
-                        }
+                        if (isEditing) return;
                         handlePointerUp();
                       }}
-                      onDoubleClick={(e) => handleLabelDoubleClick(e, item.id, labelName)}
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        cancelFocusItem?.();
+                        setEditingAnnotation(null);
+                        hasSelectedLabelRef.current = false;
+                        labelOpenTimeRef.current = Date.now();
+                        handleLabelDoubleClick(e, item.id, labelName, viewType);
+                      }}
                     >
                       {isEditing ? (
                         <input
+                          ref={labelInputRef}
                           type="text"
-                          autoFocus
                           value={editingLabel.text}
                           onChange={(e) => setEditingLabel({ ...editingLabel, text: e.target.value })}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onPointerUp={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
                           onBlur={(e) => {
-                            setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: e.target.value } : i));
+                            if (Date.now() - labelOpenTimeRef.current < 300) {
+                              e.target.focus();
+                              return;
+                            }
+                            const newName = e.target.value.trim() || defaultName;
+                            setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: newName } : i));
                             setEditingLabel(null);
+                            hasSelectedLabelRef.current = false;
                           }}
                           onKeyDown={(e) => {
+                            e.stopPropagation();
                             if (e.key === 'Enter') {
-                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: e.target.value } : i));
+                              const newName = e.target.value.trim() || defaultName;
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, customName: newName } : i));
                               setEditingLabel(null);
+                              hasSelectedLabelRef.current = false;
+                            } else if (e.key === 'Escape') {
+                              setEditingLabel(null);
+                              hasSelectedLabelRef.current = false;
                             }
-                            if (e.key === 'Escape') setEditingLabel(null);
                           }}
-                          className="bg-transparent border-b border-blue-500 outline-none text-center p-0 m-0 select-text"
+                          onKeyUp={(e) => e.stopPropagation()}
+                          className="bg-white dark:bg-slate-800 border-2 border-blue-500 rounded px-2 py-0.5 outline-none text-center shadow-lg select-text ring-2 ring-blue-400/40"
                           style={{ 
                             fontSize: `${canvasSettings?.textSize || 10}px`,
                             fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
                             color: isDarkMode ? '#60a5fa' : '#2563eb',
-                            textShadow: 'none',
-                            width: `${Math.max(editingLabel.text.length * ((canvasSettings?.textSize || 10) * 0.7), 30)}px` 
+                            minWidth: '60px',
+                            width: `${Math.max(((editingLabel.text || '').length) * ((canvasSettings?.textSize || 10) * 0.75) + 24, 60)}px` 
                           }}
                         />
                       ) : (

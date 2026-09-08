@@ -11,6 +11,15 @@ export const getOpticPhysicalLengthM = (item) => {
       return parseFloat(Math.abs(parseFloat(item.end) - parseFloat(item.start)).toFixed(3));
     }
   }
+  if (['VDCM', 'HDCM'].includes(item.type)) {
+    if (item.chamberLength !== undefined && !isNaN(item.chamberLength)) {
+      return parseFloat(parseFloat(item.chamberLength).toFixed(3));
+    }
+    if (item.length !== undefined && !isNaN(item.length)) {
+      return parseFloat(parseFloat(item.length).toFixed(3));
+    }
+    return 1.5;
+  }
   if (item.physicalLength !== undefined && !isNaN(item.physicalLength)) {
     return parseFloat(parseFloat(item.physicalLength).toFixed(3));
   }
@@ -73,18 +82,19 @@ export const getItemBoundsM = (item) => {
       start = parseFloat((dcmCenter_m - chLen / 2).toFixed(3));
       end = parseFloat((dcmCenter_m + chLen / 2).toFixed(3));
     } else {
-      const defaultBoxLen = parseFloat((L_m + 1.2).toFixed(3));
+      const defaultBoxLen = 1.5;
       start = parseFloat((dcmCenter_m - defaultBoxLen / 2).toFixed(3));
       end = parseFloat((dcmCenter_m + defaultBoxLen / 2).toFixed(3));
     }
     const boxLen = parseFloat(Math.abs(end - start).toFixed(3));
+    const finalBoxLen = boxLen > 0 ? boxLen : 1.5;
     return {
       dist: parseFloat(dist.toFixed(3)),
       center: dcmCenter_m,
-      len: boxLen > 0 ? boxLen : parseFloat((L_m + 1.2).toFixed(3)),
+      len: finalBoxLen,
       start: parseFloat(Math.min(start, end).toFixed(3)),
       end: parseFloat(Math.max(start, end).toFixed(3)),
-      physLen
+      physLen: finalBoxLen
     };
   }
 
@@ -182,7 +192,7 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
       newStart = parseFloat(val.toFixed(3));
       newEnd = parseFloat((newStart + currentBoxLen).toFixed(3));
       if (isRange) newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
-    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || !item.freeDownstream) {
+    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || (!item.freeDownstream && constraint !== 'ADJUST_LENGTH' && !isRange)) {
       // Symmetric / locked center: adjust both upstream and downstream equally from center
       const upMargin = Math.abs(centerRef - val);
       newStart = parseFloat((centerRef - upMargin).toFixed(3));
@@ -193,6 +203,10 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
       newEnd = currentEnd;
     }
     newBoxLen = parseFloat(Math.abs(newEnd - newStart).toFixed(3));
+    if (isRange) {
+      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+      newPhysLen = newBoxLen;
+    }
   } else if (field === 'end') {
     // Downstream face of the footprint / chamber
     if (constraint === 'LOCK_LENGTH' || item.lockLength) {
@@ -200,7 +214,7 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
       newEnd = parseFloat(val.toFixed(3));
       newStart = parseFloat((newEnd - currentBoxLen).toFixed(3));
       if (isRange) newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
-    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || !item.freeDownstream) {
+    } else if (constraint === 'LOCK_CENTER' || item.lockCenter || (!item.freeDownstream && constraint !== 'ADJUST_LENGTH' && !isRange)) {
       // Symmetric / locked center: adjust both downstream and upstream equally from center
       const downMargin = Math.abs(val - centerRef);
       newEnd = parseFloat((centerRef + downMargin).toFixed(3));
@@ -211,6 +225,10 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
       newStart = currentStart;
     }
     newBoxLen = parseFloat(Math.abs(newEnd - newStart).toFixed(3));
+    if (isRange) {
+      newDist = parseFloat(((newStart + newEnd) / 2).toFixed(3));
+      newPhysLen = newBoxLen;
+    }
   } else if (field === 'chamberLength' || field === 'footprintLength') {
     // Chamber footprint length resized symmetrically around center
     newBoxLen = Math.max(0.05, parseFloat(val.toFixed(3)));
@@ -221,6 +239,10 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
     const delta = newDist - currentDist;
     newStart = parseFloat((currentStart + delta).toFixed(3));
     newEnd = parseFloat((currentEnd + delta).toFixed(3));
+    if (isRange) {
+      newBoxLen = parseFloat(Math.abs(newEnd - newStart).toFixed(3));
+      newPhysLen = newBoxLen;
+    }
   } else if (field === 'length' || field === 'physicalLength') {
     // For general items, 'length' maps to optics physical length
     newPhysLen = Math.max(0.01, parseFloat(val.toFixed(3)));
@@ -252,7 +274,9 @@ export const calculateUpdatedBounds = (item, field, rawValue, constraint = 'ADJU
       updated.numPeriods = Math.max(1, Math.round((newPhysLen * 1000) / pLen));
     }
   } else if (['VDCM', 'HDCM'].includes(item.type)) {
-    updated.dimX = item.dimX ?? TYPES[item.type]?.width ?? 42;
+    updated.dimX = newBoxLen * PX_PER_M;
+    updated.physicalLength = newBoxLen;
+    updated.length = newBoxLen;
     updated.showFootprint = item.showFootprint !== undefined ? Boolean(item.showFootprint) : false;
     updated.showFootprintText = item.showFootprintText !== undefined ? Boolean(item.showFootprintText) : false;
   } else {
@@ -303,6 +327,11 @@ export const getItemMiscParams = (item, activeView) => {
     miscB = item.miscB ?? '';
     miscC = item.miscC ?? '';
     miscD = item.miscD ?? '';
+  } else if (type === 'WALL') {
+    miscA = item.wallWidth !== undefined ? item.wallWidth : (item.dimZ ? item.dimZ / PX_PER_M : 7.0);
+    miscB = item.wallHeight !== undefined ? item.wallHeight : (item.height ?? 7.0);
+    miscC = item.miscC ?? '';
+    miscD = item.miscD ?? '';
   } else {
     miscA = item.miscA ?? '';
     miscB = item.miscB ?? '';
@@ -318,13 +347,22 @@ export const getItemMiscParams = (item, activeView) => {
     ? (item.labelOffsets?.[viewKey]?.y ?? item.labelOffsets?.SIDE?.y ?? item.labelOffsets?.TOP?.y ?? item.labelOffsetY ?? 0)
     : (item.labelOffsets?.SIDE?.y ?? item.labelOffsets?.TOP?.y ?? item.labelOffsetY ?? 0);
 
+  const labelSideX = item.labelOffsets?.SIDE?.x ?? item.labelOffsetX ?? 0;
+  const labelSideY = item.labelOffsets?.SIDE?.y ?? item.labelOffsetY ?? 0;
+  const labelTopX = item.labelOffsets?.TOP?.x ?? item.labelOffsetX ?? 0;
+  const labelTopY = item.labelOffsets?.TOP?.y ?? item.labelOffsetY ?? 0;
+
   return { 
     miscA, 
     miscB, 
     miscC, 
     miscD, 
     labelX: typeof labelX === 'number' ? parseFloat(labelX.toFixed(1)) : (parseFloat(labelX) || 0), 
-    labelY: typeof labelY === 'number' ? parseFloat(labelY.toFixed(1)) : (parseFloat(labelY) || 0)
+    labelY: typeof labelY === 'number' ? parseFloat(labelY.toFixed(1)) : (parseFloat(labelY) || 0),
+    labelSideX: typeof labelSideX === 'number' ? parseFloat(labelSideX.toFixed(1)) : (parseFloat(labelSideX) || 0),
+    labelSideY: typeof labelSideY === 'number' ? parseFloat(labelSideY.toFixed(1)) : (parseFloat(labelSideY) || 0),
+    labelTopX: typeof labelTopX === 'number' ? parseFloat(labelTopX.toFixed(1)) : (parseFloat(labelTopX) || 0),
+    labelTopY: typeof labelTopY === 'number' ? parseFloat(labelTopY.toFixed(1)) : (parseFloat(labelTopY) || 0)
   };
 };
 
@@ -380,6 +418,14 @@ export const getMiscParamLabels = (type) => {
       miscD: 'Misc D'
     };
   }
+  if (type === 'WALL') {
+    return {
+      miscA: 'Wall Width (m)',
+      miscB: 'Wall Height (m)',
+      miscC: 'Misc C',
+      miscD: 'Misc D'
+    };
+  }
   return {
     miscA: 'Misc A',
     miscB: 'Misc B',
@@ -396,15 +442,16 @@ export const setItemMiscParam = (item, key, val, activeView) => {
   const updated = { ...item };
 
   if (key === 'miscA') {
-    if (['VDCM', 'HDCM'].includes(type)) {
+    if (type === 'WALL') {
+      const num = parseFloat(val) || 0;
+      updated.wallWidth = num;
+      updated.dimZ = num * PX_PER_M;
+    }
+    else if (['VDCM', 'HDCM'].includes(type)) {
       const num = parseFloat(val);
       updated.exitOffset = isNaN(num) ? (val === '' ? '' : 0.5) : num;
-      const d = isNaN(num) ? 0.5 : num;
-      const parsedA = parseFloat(updated.braggAngle);
-      const a = !isNaN(parsedA) ? parsedA : 20;
-      const tan2theta = Math.tan(2 * a * Math.PI / 180);
-      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
-      updated.dimX = L + 80;
+      const chLen = updated.chamberLength ?? 1.5;
+      updated.dimX = chLen * PX_PER_M;
     }
     else if (type === 'GRATING') updated.orientation = val;
     else if (['VFM', 'HFM'].includes(type)) {
@@ -418,15 +465,18 @@ export const setItemMiscParam = (item, key, val, activeView) => {
     else if (type === 'SAMPLE') updated.passLight = ['yes', 'true', '1'].includes(String(val).toLowerCase());
     else updated.miscA = val;
   } else if (key === 'miscB') {
-    if (['VDCM', 'HDCM'].includes(type)) {
+    if (type === 'WALL') {
+      const num = parseFloat(val) || 0;
+      updated.wallHeight = num;
+      updated.height = num;
+      updated.dimY = num * PX_PER_M;
+      updated.y = 200 - (num * PX_PER_M) / 2;
+    }
+    else if (['VDCM', 'HDCM'].includes(type)) {
       const num = parseFloat(val);
       updated.braggAngle = isNaN(num) ? (val === '' ? '' : 20) : num;
-      const a = isNaN(num) ? 20 : num;
-      const parsedD = parseFloat(updated.exitOffset);
-      const d = !isNaN(parsedD) ? parsedD : 0.5;
-      const tan2theta = Math.tan(2 * a * Math.PI / 180);
-      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
-      updated.dimX = L + 80;
+      const chLen = updated.chamberLength ?? 1.5;
+      updated.dimX = chLen * PX_PER_M;
     }
     else if (type === 'GRATING') updated.diffractAngle = parseFloat(val) || 0;
     else if (['VFM', 'HFM'].includes(type)) {
@@ -448,6 +498,30 @@ export const setItemMiscParam = (item, key, val, activeView) => {
     if (['VDCM', 'HDCM'].includes(type)) updated.crystal2Length = parseFloat(val) || 0;
     else if (type === 'SOURCE') updated.rayStyle = val;
     else updated.miscD = val;
+  } else if (key === 'labelSideX') {
+    const num = parseFloat(val) || 0;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      SIDE: { ...(item.labelOffsets?.SIDE || {}), x: num }
+    };
+  } else if (key === 'labelSideY') {
+    const num = parseFloat(val) || 0;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      SIDE: { ...(item.labelOffsets?.SIDE || {}), y: num }
+    };
+  } else if (key === 'labelTopX') {
+    const num = parseFloat(val) || 0;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      TOP: { ...(item.labelOffsets?.TOP || {}), x: num }
+    };
+  } else if (key === 'labelTopY') {
+    const num = parseFloat(val) || 0;
+    updated.labelOffsets = {
+      ...(item.labelOffsets || {}),
+      TOP: { ...(item.labelOffsets?.TOP || {}), y: num }
+    };
   } else if (key === 'labelX' || key === 'labelOffsetX') {
     const num = parseFloat(val) || 0;
     const targetView = (activeView === 'TOP' || activeView === 'SIDE') ? activeView : null;
@@ -546,8 +620,12 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
       showFootprint: Boolean(item.showFootprint),
       showFootprintText: Boolean(item.showFootprintText),
       isLocked: Boolean(item.isLocked),
-      height: item.height !== undefined ? parseFloat(item.height) : 0,
-      offset: item.offset !== undefined ? parseFloat(item.offset) : 0,
+      height: (item.type === 'SOURCE' || (item.type === 'DETECTOR' && item.stayInPath === false))
+        ? (item.height !== undefined ? parseFloat(item.height) : 0)
+        : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_M).toFixed(3)) : (item.height !== undefined ? parseFloat(item.height) : 0)),
+      offset: (item.type === 'SOURCE' || (item.type === 'DETECTOR' && item.stayInPath === false))
+        ? (item.offset !== undefined ? parseFloat(item.offset) : 0)
+        : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_M).toFixed(3)) : (item.offset !== undefined ? parseFloat(item.offset) : 0)),
       misc,
       miscLabels,
       enclosureName,
@@ -621,8 +699,10 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     'Misc B',
     'Misc C',
     'Misc D',
-    'Label Offset X (px)',
-    'Label Offset Y (px)',
+    'Label Side X (px)',
+    'Label Side Y (px)',
+    'Label Top X (px)',
+    'Label Top Y (px)',
     'Enclosure / Section',
     'Status'
   ];
@@ -662,8 +742,10 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
       `"${String(misc.miscB ?? '').replace(/"/g, '""')}"`,
       `"${String(misc.miscC ?? '').replace(/"/g, '""')}"`,
       `"${String(misc.miscD ?? '').replace(/"/g, '""')}"`,
-      typeof misc.labelX === 'number' ? misc.labelX.toFixed(1) : (parseFloat(misc.labelX) || 0).toFixed(1),
-      typeof misc.labelY === 'number' ? misc.labelY.toFixed(1) : (parseFloat(misc.labelY) || 0).toFixed(1),
+      typeof misc.labelSideX === 'number' ? misc.labelSideX.toFixed(1) : (parseFloat(misc.labelSideX) || 0).toFixed(1),
+      typeof misc.labelSideY === 'number' ? misc.labelSideY.toFixed(1) : (parseFloat(misc.labelSideY) || 0).toFixed(1),
+      typeof misc.labelTopX === 'number' ? misc.labelTopX.toFixed(1) : (parseFloat(misc.labelTopX) || 0).toFixed(1),
+      typeof misc.labelTopY === 'number' ? misc.labelTopY.toFixed(1) : (parseFloat(misc.labelTopY) || 0).toFixed(1),
       `"${(r.enclosureName || '').replace(/"/g, '""')}"`,
       `"${status}"`
     ];
@@ -741,8 +823,14 @@ export const parseCsvToItems = (csvText) => {
   const miscBIdx = getCol('miscb');
   const miscCIdx = getCol('miscc');
   const miscDIdx = getCol('miscd');
+  const labelSideXIdx = getCol('labelsidexpx', 'labelsidex', 'labelsidex_px', 'labelsidex');
+  const labelSideYIdx = getCol('labelsideypx', 'labelsidey', 'labelsidey_px', 'labelsidey');
+  const labelTopXIdx = getCol('labeltopxpx', 'labeltopx', 'labeltopx_px', 'labeltopx');
+  const labelTopYIdx = getCol('labeltopypx', 'labeltopy', 'labeltopy_px', 'labeltopy');
   const labelXIdx = getCol('labeloffsetxpx', 'labeloffsetx', 'labelx');
   const labelYIdx = getCol('labeloffsetypx', 'labeloffsety', 'labely');
+  const wallWidthIdx = getCol('wallwidthm', 'wallwidth', 'width');
+  const wallHeightIdx = getCol('wallheightm', 'wallheight');
 
   const items = [];
   const now = Date.now();
@@ -790,6 +878,13 @@ export const parseCsvToItems = (csvText) => {
     const height = elevYIdx !== -1 && !isNaN(parseFloat(cols[elevYIdx])) ? parseFloat(cols[elevYIdx]) : 0;
     const offset = latZIdx !== -1 && !isNaN(parseFloat(cols[latZIdx])) ? parseFloat(cols[latZIdx]) : 0;
 
+    let wallW = (wallWidthIdx !== -1 && !isNaN(parseFloat(cols[wallWidthIdx])))
+      ? parseFloat(cols[wallWidthIdx])
+      : (compType === 'WALL' && miscAIdx !== -1 && !isNaN(parseFloat(cols[miscAIdx])) ? parseFloat(cols[miscAIdx]) : (conf.height ? conf.height / PX_PER_M : 7.0));
+    let wallH = (wallHeightIdx !== -1 && !isNaN(parseFloat(cols[wallHeightIdx])))
+      ? parseFloat(cols[wallHeightIdx])
+      : (compType === 'WALL' && miscBIdx !== -1 && !isNaN(parseFloat(cols[miscBIdx])) ? parseFloat(cols[miscBIdx]) : (height || (conf.height ? conf.height / PX_PER_M : 7.0)));
+
     const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(compType);
     let item = {
       id: `imported_${now}_${i}`,
@@ -807,9 +902,13 @@ export const parseCsvToItems = (csvText) => {
       isLocked,
       height,
       offset,
+      wallWidth: wallW,
+      wallHeight: wallH,
       dimX: isRange ? Math.abs(endVal - startVal) * PX_PER_M : physLen * PX_PER_M,
+      dimY: compType === 'WALL' ? wallH * PX_PER_M : (isRange ? (conf.height || 20) : undefined),
+      dimZ: compType === 'WALL' ? wallW * PX_PER_M : (isRange ? (conf.height || 20) : undefined),
       x: ORIGIN_X + dist * PX_PER_M,
-      y: 150 - height * PX_PER_M,
+      y: isRange ? (compType === 'CHAMBER' ? 150 - height * PX_PER_M : 200 - (wallH * PX_PER_M) / 2) : 150 - height * PX_PER_M,
       z: 150 + offset * PX_PER_M
     };
 
@@ -825,6 +924,18 @@ export const parseCsvToItems = (csvText) => {
     if (miscDIdx !== -1 && cols[miscDIdx] !== undefined && cols[miscDIdx] !== '') {
       item = setItemMiscParam(item, 'miscD', cols[miscDIdx]);
     }
+    if (labelSideXIdx !== -1 && cols[labelSideXIdx] !== undefined && cols[labelSideXIdx] !== '') {
+      item = setItemMiscParam(item, 'labelSideX', cols[labelSideXIdx]);
+    }
+    if (labelSideYIdx !== -1 && cols[labelSideYIdx] !== undefined && cols[labelSideYIdx] !== '') {
+      item = setItemMiscParam(item, 'labelSideY', cols[labelSideYIdx]);
+    }
+    if (labelTopXIdx !== -1 && cols[labelTopXIdx] !== undefined && cols[labelTopXIdx] !== '') {
+      item = setItemMiscParam(item, 'labelTopX', cols[labelTopXIdx]);
+    }
+    if (labelTopYIdx !== -1 && cols[labelTopYIdx] !== undefined && cols[labelTopYIdx] !== '') {
+      item = setItemMiscParam(item, 'labelTopY', cols[labelTopYIdx]);
+    }
     if (labelXIdx !== -1 && cols[labelXIdx] !== undefined && cols[labelXIdx] !== '') {
       item = setItemMiscParam(item, 'labelX', cols[labelXIdx]);
     }
@@ -833,13 +944,11 @@ export const parseCsvToItems = (csvText) => {
     }
 
     if (['VDCM', 'HDCM'].includes(compType)) {
-      const parsedD = parseFloat(item.exitOffset);
-      const d = !isNaN(parsedD) ? parsedD : 0.5;
-      const parsedA = parseFloat(item.braggAngle);
-      const a = !isNaN(parsedA) ? parsedA : 20;
-      const tan2theta = Math.tan(2 * a * Math.PI / 180);
-      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((d * PX_PER_M) / tan2theta) : 40;
-      item.dimX = L + 80;
+      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : 1.5;
+      item.dimX = chLen * PX_PER_M;
+      item.length = chLen;
+      item.physicalLength = chLen;
+      item.chamberLength = chLen;
     }
 
     items.push(item);

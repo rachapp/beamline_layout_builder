@@ -112,7 +112,15 @@ export const usePhysicsEngine = (items) => {
         } else {
           const hitVal = currVal + currSlope * (item.distance - prevDist);
           if (beamActive) tPoints.push({ x: item.x, [plane]: hitVal, parentId: item.id, sub: 0 });
-          cItemsMap[item.id] = { ...item, [plane]: hitVal };
+          
+          const isFixedDetector = item.type === 'DETECTOR' && item.stayInPath === false;
+          const planeVal = isFixedDetector
+            ? (item[plane] !== undefined 
+                ? item[plane] 
+                : (plane === 'y' ? 150 - (item.height ?? 0) * PX_PER_M : 150 + (item.offset ?? 0) * PX_PER_M))
+            : hitVal;
+
+          cItemsMap[item.id] = { ...item, [plane]: planeVal };
           
           currVal = hitVal;
           prevDist = item.distance;

@@ -66,11 +66,8 @@ export const mapTemplateToItems = (templateData) => {
       end = isNaN(end) ? dist : end;
       start = isNaN(start) ? parseFloat((end - physicalLength).toFixed(3)) : start;
     } else if (['VDCM', 'HDCM'].includes(item.type)) {
-      const D_m = parseFloat(item.exitOffset) ?? 0.5;
-      const theta_deg = parseFloat(item.braggAngle) ?? 20;
-      const tan2theta = Math.tan(2 * theta_deg * Math.PI / 180);
-      const L = Math.abs(tan2theta) > 0.001 ? Math.abs((D_m * PX_PER_M) / tan2theta) : 40;
-      dimX = item.housingLength !== undefined ? (parseFloat(item.housingLength) * PX_PER_M) : (item.dimX ?? (L + 80));
+      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : (item.housingLength !== undefined ? parseFloat(item.housingLength) : 1.5);
+      dimX = chLen * PX_PER_M;
       if (item.housingHeight !== undefined) {
         dimY = parseFloat(item.housingHeight) * PX_PER_M;
         dimZ = parseFloat(item.housingHeight) * PX_PER_M;
@@ -94,6 +91,7 @@ export const mapTemplateToItems = (templateData) => {
       showLabel: item.showLabel !== false,
       showFootprint: Boolean(item.showFootprint),
       showFootprintText: Boolean(item.showFootprintText),
+      ...(item.type === 'DETECTOR' ? { stayInPath: item.stayInPath !== false } : {}),
       ...(isRange ? { start, end } : (isSource ? { start, end } : {}))
     };
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));

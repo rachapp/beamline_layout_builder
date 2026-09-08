@@ -9,7 +9,7 @@
     { "type": "HDCM", "distance": 32, "height": 0.5, "offset": 0, "exitOffset": 0.5, "braggAngle": 20, "crystal1Length": 1.0, "crystal2Length": 1.0, "customName": "Horizontal DCM" },
     { "type": "HFM", "distance": 38, "height": 0.5, "offset": 0.5, "length": 2, "customName": "Horizontal Mirror" },
     { "type": "SAMPLE", "distance": 44, "height": 0.5, "offset": 1.0, "length": 0.6, "passLight": true, "customName": "Target Sample" },
-    { "type": "DETECTOR", "distance": 50, "height": 0.5, "offset": 1.0, "length": 1.05, "passLight": false, "detectorType": "Silicon Detector", "customName": "Final Detector" }
+    { "type": "DETECTOR", "distance": 50, "height": 0.5, "offset": 1.0, "length": 1.05, "stayInPath": true, "passLight": false, "detectorType": "Silicon Detector", "customName": "Final Detector" }
   ],
   "Diagnostic Line": [
     { "type": "SOURCE", "distance": 0, "height": 0, "offset": 0, "length": 2, "periodLength": 50, "numPeriods": 40, "sourceType": "Undulator", "animate": true, "customName": "Undulator Source" },
@@ -26,7 +26,7 @@
     { "type": "SLIT", "distance": 28, "height": 0.5, "offset": 0, "customName": "Diag Slit 4" },
     { "type": "SCREEN", "distance": 28.5, "height": 0.5, "offset": 0, "customName": "Diag Screen 4" },
     { "type": "SAMPLE", "distance": 32, "height": 0.5, "offset": 0, "length": 0.6, "passLight": true, "customName": "Sample Stage" },
-    { "type": "DETECTOR", "distance": 38, "height": 0.5, "offset": 0, "length": 1.05, "passLight": false, "detectorType": "Silicon Detector", "customName": "Detector" },
+    { "type": "DETECTOR", "distance": 38, "height": 0.5, "offset": 0, "length": 1.05, "stayInPath": true, "passLight": false, "detectorType": "Silicon Detector", "customName": "Detector" },
     { "type": "WALL", "start": 9.5, "end": 10.5, "height": 10.0, "customName": "FOE Wall" },
     { "type": "HUTCH", "start": 14, "end": 26, "height": 7.0, "customName": "Optics Hutch" }
   ],
@@ -46,7 +46,7 @@
     { "type": "VFM", "distance": 24, "height": -0.5, "offset": 0, "length": 2, "customName": "V-Focus Mirror" },
     { "type": "HFM", "distance": 25, "height": -0.5, "offset": 0, "length": 2, "customName": "H-Focus Mirror" },
     { "type": "SAMPLE", "distance": 28, "height": -0.5, "offset": 0.5, "length": 0.6, "passLight": true, "customName": "Micro-Sample" },
-    { "type": "DETECTOR", "distance": 35, "height": -0.5, "offset": 0.5, "length": 1.05, "detectorType": "Image Plate", "customName": "WAXS Detector" },
+    { "type": "DETECTOR", "distance": 35, "height": -0.5, "offset": 0.5, "length": 1.05, "stayInPath": true, "detectorType": "Image Plate", "customName": "WAXS Detector" },
     { "type": "WALL", "start": 10, "end": 11, "height": 10, "customName": "Shielding Wall" }
   ],
   "Long Station (Diffraction)": [
@@ -56,7 +56,7 @@
     { "type": "VFM", "distance": 40, "height": 0.5, "offset": 0, "length": 2, "customName": "Long Focusing Mirror" },
     { "type": "XBPM", "distance": 60, "height": 0.5, "offset": 0, "length": 0.425, "customName": "Far BPM" },
     { "type": "SAMPLE", "distance": 80, "height": 0.5, "offset": 0, "length": 0.6, "customName": "Large Hutch Sample" },
-    { "type": "DETECTOR", "distance": 120, "height": 0.5, "offset": 0, "length": 1.05, "detectorType": "Silicon Detector", "customName": "Far-Field Detector" },
+    { "type": "DETECTOR", "distance": 120, "height": 0.5, "offset": 0, "length": 1.05, "stayInPath": true, "detectorType": "Silicon Detector", "customName": "Far-Field Detector" },
     { "type": "HUTCH", "start": 75, "end": 130, "height": 8, "customName": "Experimental Hall" }
   ],
   "Example 1": [
@@ -80,8 +80,8 @@
     {"type":"SCREEN","customName":"Screen","distance":49.99,"height":1.23,"offset":0},
     {"type":"XBPM","customName":"XBPM","distance":51.29,"height":0.69,"offset":0,"length":0.425},
     {"type":"HUTCH","customName":"Hutch","distance":52.3,"height":7,"offset":0,"start":43.8,"end":60.8},
-    {"type":"SAMPLE","customName":"Sample","distance":54.61,"height":0.73,"offset":0,"length":0.6,"passLight":true},
-    {"type":"DETECTOR","customName":"Detector","distance":59.44,"height":0.63,"offset":-0.27,"length":1.05,"detectorType":"Silicon Detector","passLight":false}
+    {"type":"SAMPLE","customName":"Sample","distance":54.61,"height":1.7,"offset":0,"length":0.6,"passLight":true},
+    {"type":"DETECTOR","customName":"Detector","distance":59.44,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":false}
   ],
   "SPS-II_GIXRD/TRXRF": [
     {"type":"SOURCE","customName":"IVU18","showLabel":true,"distance":0,"height":1.2,"offset":0,"length":2,"periodLength":50,"numPeriods":40,"sourceType":"Undulator","rayColor":"#ef4444","rayWidth":1,"rayStyle":"solid","animate":true,"showArrow":false},
@@ -94,7 +94,7 @@
     {"type":"FILTER","customName":"Filter","showLabel":false,"distance":22,"height":0.78,"offset":0},
     {"type":"SLIT","customName":"Slit","showLabel":false,"distance":22.4,"height":1.28,"offset":0},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":22.72,"height":1.23,"offset":0},
-    {"type":"VDCM","customName":"VDCM","showLabel":true,"distance":24,"height":1.2,"offset":0,"length":4.595876796297105,"exitOffset":0.5,"braggAngle":20,"crystal1Length":1.0,"crystal2Length":1.0},
+    {"type":"VDCM","customName":"VDCM","showLabel":true,"distance":24,"height":1.2,"offset":0,"length":1.5,"exitOffset":0.5,"braggAngle":20,"crystal1Length":1.0,"crystal2Length":1.0},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":28,"height":1.52,"offset":0},
     {"type":"VFM","customName":"VFM","showLabel":true,"distance":31,"height":1.2,"offset":0,"length":2},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":34,"height":1.66,"offset":0},
@@ -105,8 +105,8 @@
     {"type":"XBPM","customName":"XBPM","showLabel":true,"distance":42.72,"height":1.8,"offset":0,"length":0.425},
     {"type":"SLIT","customName":"Slit","showLabel":false,"distance":43.71,"height":1.77,"offset":0},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":44.05,"height":1.66,"offset":0},
-    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":45,"height":0,"offset":-0.13,"length":0.6,"passLight":true},
-    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":46,"height":1.79,"offset":0.28,"length":1.05,"detectorType":"Silicon Detector","passLight":false},
+    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":45,"height":1.7,"offset":0,"length":0.6,"passLight":true},
+    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":46,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":false},
     {"type":"HUTCH","customName":"Optics Hutch 1","showLabel":true,"distance":1019.5,"height":7,"offset":0,"start":20,"end":39},
     {"type":"HUTCH","customName":"Optics Hutch 2","showLabel":true,"distance":1972,"height":7,"offset":0,"start":39,"end":44},
     {"type":"HUTCH","customName":"Experimental Hutch","showLabel":true,"distance":2224,"height":7,"offset":0,"start":44,"end":48}
@@ -132,11 +132,11 @@
     {"type":"XBPM","customName":"XBPM","showLabel":true,"distance":35.95,"height":2.35,"offset":0,"length":0.425},
     {"type":"SLIT","customName":"Slit","showLabel":true,"distance":37,"height":1.92,"offset":0},
     {"type":"SCREEN","customName":"Screen","showLabel":false,"distance":37.72,"height":1.58,"offset":0},
-    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":39,"height":0,"offset":-0.13,"length":0.6,"passLight":true},
-    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":39.5,"height":1.66,"offset":0.28,"length":1.05,"detectorType":"Silicon Detector","passLight":true},
+    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":39,"height":1.7,"offset":0,"length":0.6,"passLight":true},
+    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":39.5,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":true},
     {"type":"CHAMBER","customName":"Movable detector","showLabel":true,"distance":44.59,"height":3,"offset":1.5,"start":39.09,"end":50.09},
-    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":45.44,"height":1.52,"offset":0,"length":1.05,"detectorType":"Silicon Detector","passLight":true},
-    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":49.72,"height":1.84,"offset":0,"length":1.05,"detectorType":"Silicon Detector","passLight":false},
+    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":45.44,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":true},
+    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":49.72,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":false},
     {"type":"HUTCH","customName":"Optics Hutch 1","showLabel":true,"distance":1013.5,"height":7,"offset":0,"start":20,"end":27},
     {"type":"HUTCH","customName":"Hutch","showLabel":true,"distance":1370,"height":7,"offset":0,"start":27,"end":40}
   ],
@@ -155,7 +155,7 @@
     {"type":"VDCM","customName":"VDCM","showLabel":true,"distance":24,"height":1.2,"offset":0,"length":4.595876796297105,"exitOffset":0.5,"braggAngle":41.4,"crystal1Length":1.0,"crystal2Length":1.0},
     {"type":"SLIT","customName":"Slit","showLabel":false,"distance":26.07,"height":1.7,"offset":0},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":26.44,"height":1.45,"offset":0},
-    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":28,"height":1.61,"offset":0,"length":0.6,"passLight":true},
+    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":28,"height":1.7,"offset":0,"length":0.6,"passLight":true},
     {"type":"HUTCH","customName":"HRXRD station/Optics Hutch 2","showLabel":true,"distance":29.02,"height":7,"offset":0,"start":26.02,"end":32.02},
     {"type":"VFM","customName":"VFM","showLabel":true,"distance":31,"height":1.2,"offset":0,"length":2},
     {"type":"SCREEN","customName":"FSM","showLabel":true,"distance":32.07,"height":1.74,"offset":0},
@@ -166,8 +166,8 @@
     {"type":"XBPM","customName":"XBPM","showLabel":true,"distance":43.36,"height":1.66,"offset":0,"length":0.425},
     {"type":"SLIT","customName":"Slit","showLabel":false,"distance":44.05,"height":1.8,"offset":0},
     {"type":"SCREEN","customName":"Screen","showLabel":false,"distance":44.34,"height":1.56,"offset":0},
-    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":44.98,"height":2.2,"offset":0,"length":0.6,"passLight":true},
-    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":45.74,"height":1.49,"offset":0.19,"length":1.05,"detectorType":"Silicon Detector","passLight":false},
+    {"type":"SAMPLE","customName":"Sample","showLabel":true,"distance":44.98,"height":1.7,"offset":0,"length":0.6,"passLight":true},
+    {"type":"DETECTOR","customName":"Detector","showLabel":false,"distance":45.74,"height":1.7,"offset":0,"length":1.05,"stayInPath":true,"detectorType":"Silicon Detector","passLight":false},
     {"type":"HUTCH","customName":"Optics Hutch 3","showLabel":true,"distance":1972,"height":7,"offset":0,"start":39,"end":44},
     {"type":"HUTCH","customName":"Experimental Hutch","showLabel":true,"distance":2224,"height":7,"offset":0,"start":44,"end":48}
   ]

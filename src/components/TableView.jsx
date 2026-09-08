@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { TYPES, PX_PER_M } from '../constants';
 import { computeConstructionSchedule, downloadCsv, getItemBoundsM, calculateUpdatedBounds, setItemMiscParam } from '../utils/constructionUtils';
+import { BufferedNumberInput, BufferedTextInput } from './BufferedNumberInput';
 
 export const TableView = ({
   items = [],
@@ -136,7 +137,7 @@ export const TableView = ({
     setItems(prev => prev.map(item => {
       if (item.id !== itemId) return item;
 
-      if (['miscA', 'miscB', 'miscC', 'miscD', 'labelX', 'labelY'].includes(field)) {
+      if (['miscA', 'miscB', 'miscC', 'miscD', 'labelX', 'labelY', 'labelSideX', 'labelSideY', 'labelTopX', 'labelTopY'].includes(field)) {
         return setItemMiscParam(item, field, value);
       }
 
@@ -156,13 +157,17 @@ export const TableView = ({
       } else if (field === 'showFootprint') {
         updated.showFootprint = value;
       } else if (field === 'height') {
+        if (!['SOURCE', 'DETECTOR'].includes(item.type)) return item;
         const h = parseFloat(value) || 0;
         updated.height = h;
         updated.y = 150 - h * PX_PER_M;
+        if (item.type === 'DETECTOR') updated.stayInPath = false;
       } else if (field === 'offset') {
+        if (!['SOURCE', 'DETECTOR'].includes(item.type)) return item;
         const o = parseFloat(value) || 0;
         updated.offset = o;
         updated.z = 150 + o * PX_PER_M;
+        if (item.type === 'DETECTOR') updated.stayInPath = false;
       } else if (field === 'type') {
         updated.type = value;
         const conf = TYPES[value];
@@ -195,6 +200,7 @@ export const TableView = ({
     }
     setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
     setSelectedId(newItem.id);
+    if (onFocusItem) onFocusItem(newItem.id);
   };
 
   // Delete component
@@ -237,6 +243,7 @@ export const TableView = ({
 
     setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
     setSelectedId(newItem.id);
+    if (onFocusItem) onFocusItem(newItem.id);
     setIsAddingNew(false);
     setNewCompName('');
   };
@@ -649,8 +656,10 @@ export const TableView = ({
               <th className="py-2 px-2 text-center" title="Misc Parameter B (Type-specific)">Misc B</th>
               <th className="py-2 px-2 text-center" title="Misc Parameter C (Type-specific)">Misc C</th>
               <th className="py-2 px-2 text-center" title="Misc Parameter D (Type-specific)">Misc D</th>
-              <th className="py-2 px-2 text-right" title="Canvas Label Offset X (px)">Label X (px)</th>
-              <th className="py-2 px-2 text-right" title="Canvas Label Offset Y (px)">Label Y (px)</th>
+              <th className="py-2 px-2 text-right" title="Side View Canvas Label Offset X (px)">Side X (px)</th>
+              <th className="py-2 px-2 text-right" title="Side View Canvas Label Offset Y (px)">Side Y (px)</th>
+              <th className="py-2 px-2 text-right" title="Top View Canvas Label Offset X (px)">Top X (px)</th>
+              <th className="py-2 px-2 text-right" title="Top View Canvas Label Offset Y (px)">Top Y (px)</th>
               <th className="py-2 px-3">Enclosure / Station</th>
               <th className="py-2 px-3 text-center w-28">Actions</th>
             </tr>
@@ -658,7 +667,7 @@ export const TableView = ({
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="19" className="py-8 text-center opacity-60 font-bold">
+                <td colSpan="21" className="py-8 text-center opacity-60 font-bold">
                   No components match the current filter or search criteria.
                 </td>
               </tr>
@@ -720,11 +729,10 @@ export const TableView = ({
 
                     {/* Component Name / Tag Input */}
                     <td className="py-2 px-3">
-                      <input
-                        type="text"
+                      <BufferedTextInput
                         value={row.name}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'customName', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'customName', val)}
                         className={`w-full py-0.5 px-1.5 font-bold border rounded outline-none transition-colors ${
                           isSelected
                             ? 'border-blue-500 bg-white dark:bg-slate-900'
@@ -736,12 +744,11 @@ export const TableView = ({
                     {/* Center Distance X (m) Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1 justify-end">
-                        <input
-                          type="number"
-                          step="0.05"
+                        <BufferedNumberInput
+                          step={0.05}
                           value={row.dist}
                           onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => handleCellChange(row.id, 'distance', e.target.value)}
+                          onChange={(val) => handleCellChange(row.id, 'distance', val)}
                           className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
                             isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
                           } ${theme.text}`}
@@ -769,13 +776,12 @@ export const TableView = ({
                     <td className="py-2 px-3 text-right whitespace-nowrap">
                       {!['VDCM', 'HDCM', 'SCREEN', 'SLIT', 'XBPM'].includes(row.type) ? (
                         <div className="inline-flex items-center gap-1 justify-end">
-                          <input
-                            type="number"
-                            step="0.05"
-                            min="0.01"
+                          <BufferedNumberInput
+                            step={0.05}
+                            min={0.01}
                             value={row.length}
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => handleCellChange(row.id, 'length', e.target.value)}
+                            onChange={(val) => handleCellChange(row.id, 'length', val)}
                             className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
                               isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             } ${theme.text}`}
@@ -804,12 +810,11 @@ export const TableView = ({
 
                     {/* Upstream Face X_start (m) Editable Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap bg-blue-500/5 dark:bg-blue-500/5">
-                      <input
-                        type="number"
-                        step="0.05"
+                      <BufferedNumberInput
+                        step={0.05}
                         value={row.start}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'start', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'start', val)}
                         className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
                           isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
                         } ${theme.text}`}
@@ -819,12 +824,11 @@ export const TableView = ({
 
                     {/* Downstream Face X_end (m) Editable Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap bg-blue-500/5 dark:bg-blue-500/5">
-                      <input
-                        type="number"
-                        step="0.05"
+                      <BufferedNumberInput
+                        step={0.05}
                         value={row.end}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'end', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'end', val)}
                         className={`w-20 text-right py-0.5 px-1.5 font-mono font-bold border rounded outline-none ${
                           isSelected ? 'border-blue-500 bg-white dark:bg-slate-900' : 'border-transparent hover:border-gray-400/40 bg-transparent'
                         } ${theme.text}`}
@@ -855,102 +859,140 @@ export const TableView = ({
 
                     {/* Elevation Height Y (m) Input */}
                     <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={row.height}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'height', e.target.value)}
-                        className="w-16 text-right py-0.5 px-1 font-mono font-bold border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
-                      />
+                      {(() => {
+                        const canEditElevation = ['SOURCE', 'DETECTOR'].includes(row.type);
+                        return (
+                          <BufferedNumberInput
+                            step={0.05}
+                            value={row.height}
+                            disabled={!canEditElevation}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(val) => handleCellChange(row.id, 'height', val)}
+                            className={`w-16 text-right py-0.5 px-1 font-mono font-bold border rounded outline-none ${
+                              !canEditElevation 
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
+                                : 'border-transparent hover:border-gray-400/40 bg-transparent'
+                            }`}
+                            title={!canEditElevation ? "Auto-calculated from beam path (editable on Source & Detector only)" : "Elevation Height Y (m)"}
+                          />
+                        );
+                      })()}
                     </td>
 
                     {/* Lateral Offset Z (m) Input */}
                     <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={row.offset}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'offset', e.target.value)}
-                        className="w-16 text-right py-0.5 px-1 font-mono font-bold border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
-                      />
+                      {(() => {
+                        const canEditElevation = ['SOURCE', 'DETECTOR'].includes(row.type);
+                        return (
+                          <BufferedNumberInput
+                            step={0.05}
+                            value={row.offset}
+                            disabled={!canEditElevation}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(val) => handleCellChange(row.id, 'offset', val)}
+                            className={`w-16 text-right py-0.5 px-1 font-mono font-bold border rounded outline-none ${
+                              !canEditElevation 
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
+                                : 'border-transparent hover:border-gray-400/40 bg-transparent'
+                            }`}
+                            title={!canEditElevation ? "Auto-calculated from beam path (editable on Source & Detector only)" : "Lateral Offset Z (m)"}
+                          />
+                        );
+                      })()}
                     </td>
 
                     {/* Misc A */}
                     <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="text"
+                      <BufferedTextInput
                         value={row.misc?.miscA ?? ''}
                         placeholder={row.miscLabels?.miscA || '-'}
                         title={row.miscLabels?.miscA || 'Misc A'}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'miscA', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'miscA', val)}
                         className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
 
                     {/* Misc B */}
                     <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="text"
+                      <BufferedTextInput
                         value={row.misc?.miscB ?? ''}
                         placeholder={row.miscLabels?.miscB || '-'}
                         title={row.miscLabels?.miscB || 'Misc B'}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'miscB', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'miscB', val)}
                         className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
 
                     {/* Misc C */}
                     <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="text"
+                      <BufferedTextInput
                         value={row.misc?.miscC ?? ''}
                         placeholder={row.miscLabels?.miscC || '-'}
                         title={row.miscLabels?.miscC || 'Misc C'}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'miscC', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'miscC', val)}
                         className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
 
                     {/* Misc D */}
                     <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="text"
+                      <BufferedTextInput
                         value={row.misc?.miscD ?? ''}
                         placeholder={row.miscLabels?.miscD || '-'}
                         title={row.miscLabels?.miscD || 'Misc D'}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'miscD', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'miscD', val)}
                         className="w-20 text-center py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
 
-                    {/* Label Offset X (px) */}
+                    {/* Label Side X (px) */}
                     <td className="py-2 px-1 text-right whitespace-nowrap">
-                      <input
-                        type="number"
-                        step="1"
-                        value={row.misc?.labelX ?? 0}
-                        title="Canvas Label Horizontal Offset (px)"
+                      <BufferedNumberInput
+                        step={1}
+                        value={row.misc?.labelSideX ?? 0}
+                        title="Side View Canvas Label Horizontal Offset (px)"
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'labelX', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'labelSideX', val)}
                         className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
 
-                    {/* Label Offset Y (px) */}
+                    {/* Label Side Y (px) */}
                     <td className="py-2 px-1 text-right whitespace-nowrap">
-                      <input
-                        type="number"
-                        step="1"
-                        value={row.misc?.labelY ?? 0}
-                        title="Canvas Label Vertical Offset (px)"
+                      <BufferedNumberInput
+                        step={1}
+                        value={row.misc?.labelSideY ?? 0}
+                        title="Side View Canvas Label Vertical Offset (px)"
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleCellChange(row.id, 'labelY', e.target.value)}
+                        onChange={(val) => handleCellChange(row.id, 'labelSideY', val)}
+                        className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Label Top X (px) */}
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                      <BufferedNumberInput
+                        step={1}
+                        value={row.misc?.labelTopX ?? 0}
+                        title="Top View Canvas Label Horizontal Offset (px)"
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(val) => handleCellChange(row.id, 'labelTopX', val)}
+                        className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
+                      />
+                    </td>
+
+                    {/* Label Top Y (px) */}
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                      <BufferedNumberInput
+                        step={1}
+                        value={row.misc?.labelTopY ?? 0}
+                        title="Top View Canvas Label Vertical Offset (px)"
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(val) => handleCellChange(row.id, 'labelTopY', val)}
                         className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
                     </td>
@@ -973,6 +1015,7 @@ export const TableView = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedId(row.id);
+                            if (onFocusItem) onFocusItem(row.id);
                           }}
                           className={`p-1 border rounded transition-colors ${
                             isSelected ? 'bg-blue-600 text-white' : `${theme.buttonBg} ${theme.text}`
