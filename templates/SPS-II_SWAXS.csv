@@ -1,28 +1,19 @@
-# SPS-II_SWAXS - Construction & Spatial Guide,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-# Generated: 08/09/2026, 22:41:39,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-# Total Beamline Length: 61 m | Components: 27,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+# Synchrotron Beamline - Construction & Spatial Guide
+# Generated: 09/09/2026, 00:41:01
+# Total Beamline Length: 45 m | Components: 15
 Sequence #,Component Name,Type,Center Position X (m),Optics Physical Length (m),Chamber Footprint Length (m),Upstream Face X_start (m),Downstream Face X_end (m),Asymmetric Chamber,Show Footprint Box,Show Footprint Text,Show Label,Locked,Lock Length,Lock Center,Major Color,Minor Color,Clearance to Next (m),Next Component,Elevation Y (m),Lateral Offset Z (m),Wall/Enclosure Width (m),Wall/Enclosure Height (m),Ray Color,Ray Width,Ray Style,Show Ray Arrow,Animate Ray,Misc A,Misc B,Misc C,Misc D,Label Side X (px),Label Side Y (px),Label Top X (px),Label Top Y (px),Enclosure / Section
-1,IVU18,SOURCE,0,2,2,-2,0,NO,NO,NO,YES,NO,NO,NO,,,0.9,Slit,1.2,0,,,#ef4444,1,solid,NO,YES,Undulator,50,40,solid,,,,,Open Beamline
-2,Slit,SLIT,1.35,0.3,0.9,0.9,1.8,NO,NO,NO,YES,NO,NO,NO,,,0.567,XBPM,1.24,0,,,,,,,,,,,,,,,,Open Beamline
-3,XBPM,XBPM,2.88,0.425,1.026,2.367,3.393,NO,NO,NO,YES,NO,NO,NO,,,4.235,XBPM,1.28,0,,,,,,,,,,,,,,,,Open Beamline
-4,XBPM,XBPM,8.14,0.425,1.024,7.628,8.652,NO,NO,NO,YES,NO,NO,NO,,,0.498,Screen,1.18,0,,,,,,,,,,,,,,,,Open Beamline
-5,Screen,SCREEN,9.75,0.6,1.2,9.15,10.35,NO,NO,NO,YES,NO,NO,NO,,,-0.36,Wall,1.18,0,,,,,,,,,,,,,,,,Open Beamline
-6,Wall,WALL,10.59,1.2,1.2,9.99,11.19,NO,NO,NO,YES,NO,NO,NO,,,8.81,Optics Hutch 1,7,0,7,7,,,,,,7,7,,,,,,,Open Beamline
-8,Filter,FILTER,21.4,0.4,1,20.9,21.9,NO,NO,NO,YES,NO,NO,NO,,,-0.4,Filter,1.2,0,,,,,,,,,,,,,,,,Optics Hutch 1
-9,Filter,FILTER,22,0.4,1,21.5,22.5,NO,NO,NO,NO,NO,NO,NO,,,-0.55,Slit,0.78,0,,,,,,,,,,,,,,,,Optics Hutch 1
-10,Slit,SLIT,22.4,0.3,0.9,21.95,22.85,NO,NO,NO,NO,NO,NO,NO,,,-0.73,FSM,1.28,0,,,,,,,,,,,,,,,,Optics Hutch 1
-11,FSM,SCREEN,22.72,0.6,1.2,22.12,23.32,NO,NO,NO,YES,NO,NO,NO,,,0.228,VDCM,1.23,0,,,,,,,,,,,,,,,,Optics Hutch 1
-12,DCM,VDCM,24,1.5,1.5,23.548,25.048,NO,NO,NO,YES,NO,NO,NO,,,0.482,Slit,1.2,0,,,,,,,,0.25,45,0.7,0.7,,,,,Optics Hutch 1
-13,Slit,SLIT,25.98,0.3,0.9,25.53,26.43,NO,NO,NO,YES,NO,NO,NO,,,0.37,FSM,1.55,0,,,,,,,,,,,,,,,,Optics Hutch 1
-14,FSM,SCREEN,27.4,0.6,1.2,26.8,28,NO,NO,NO,YES,NO,NO,NO,,,-1,Hutch,1.38,0,,,,,,,,,,,,,,,,Open Beamline
-16,VFM,VFM,29.7,2,2.6,28.4,31,NO,NO,NO,YES,NO,NO,NO,,,-2,HFM,1.2,0,,,,,,,,1,0,,0.3,,,,,Hutch
-17,HFM,HFM,30.3,2,2.6,29,31.6,NO,NO,NO,YES,NO,NO,NO,,,0.95,Slit,1.21,0.37,,,,,,,,1,0,,0.3,,,,,Hutch
-18,Slit,SLIT,33,0.3,0.9,32.55,33.45,NO,NO,NO,YES,NO,NO,NO,,,-0.05,FSM,1.64,0,,,,,,,,,,,,,,,,Hutch
-19,FSM,SCREEN,34,0.6,1.2,33.4,34.6,NO,NO,NO,YES,NO,NO,NO,,,0.838,XBPM,1.66,0,,,,,,,,,,,,,,,,Hutch
-20,XBPM,XBPM,35.95,0.425,1.025,35.438,36.463,NO,NO,NO,YES,NO,NO,NO,,,0.087,Slit,2.35,0,,,,,,,,,,,,,,,,Hutch
-21,Slit,SLIT,37,0.3,0.9,36.55,37.45,NO,NO,NO,YES,NO,NO,NO,,,-0.33,Screen,1.92,0,,,,,,,,,,,,,,,,Hutch
-22,Screen,SCREEN,37.72,0.6,1.2,37.12,38.32,NO,NO,NO,NO,NO,NO,NO,,,0.08,Sample,1.58,0,,,,,,,,,,,,,,,,Hutch
-23,Sample,SAMPLE,39,0.6,1.2,38.4,39.6,NO,NO,NO,YES,NO,NO,NO,,,-0.925,Detector,1.7,0,,,,,,,,YES,,,,,,,,Hutch
-24,Detector,DETECTOR,39.5,1.05,1.65,38.675,40.325,NO,NO,NO,NO,NO,NO,NO,,,-1.235,Movable detector,1.7,0,,,,,,,,Silicon Detector,YES,YES,,,,,,Open Beamline
-26,Detector,DETECTOR,45.44,1.05,1.65,44.615,46.265,NO,NO,NO,NO,NO,NO,NO,,,2.63,Detector,1.7,0,,,,,,,,Silicon Detector,YES,YES,,,,,,Movable detector
-27,Detector,DETECTOR,49.72,1.05,1.65,48.895,50.545,NO,NO,NO,NO,NO,NO,NO,,,10.455,End of Beamline,1.7,0,,,,,,,,Silicon Detector,NO,YES,,,,,,Open Beamline
+1,"IVU32",SOURCE,0.000,3.328,3.328,-3.328,0.000,NO,NO,NO,YES,YES,NO,NO,"","",20.700,"Wall",0.000,0.000,,,"#ef4444",1.0,"dashed",NO,YES,"Undulator","32","104","dashed",,,,,"Open Beamline"
+2,"Wall",WALL,20.850,0.300,0.300,20.700,21.000,NO,NO,NO,YES,YES,YES,NO,"","",4.849,"DCM",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
+3,"DCM",VDCM,26.300,1.200,1.200,25.849,27.049,NO,YES,NO,YES,NO,NO,NO,"","",-0.599,"Slit",0.125,0.000,,,"",,"",,,"0.25","20","0.5","0.7",,,2.2,12.3,"Open Beamline"
+4,"Slit",SLIT,26.900,0.300,0.900,26.450,27.350,NO,NO,NO,YES,YES,NO,NO,"","",1.400,"Screen",0.250,0.000,,,"",,"",,,"","","","",,,4.2,8.3,"Open Beamline"
+5,"Screen",SCREEN,29.000,0.600,0.500,28.750,29.250,NO,YES,NO,YES,NO,NO,NO,"","",0.150,"VFM",0.250,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
+6,"VFM",VFM,29.700,0.600,0.600,29.400,30.000,NO,YES,NO,YES,YES,NO,NO,"","",0.000,"HFM",0.250,0.000,,,"",,"",,,"0.6","0","","0.3",,,-0.7,9.5,"Open Beamline"
+7,"HFM",HFM,30.300,0.600,0.600,30.000,30.600,NO,YES,NO,YES,YES,NO,NO,"","",3.450,"Slit",0.258,0.000,,,"",,"",,,"0.6","0","","0.3",12.0,15.1,7.0,8.8,"Open Beamline"
+8,"Side Anchor",ANCHOR_SIDE,33.700,0.000,0.000,33.700,33.700,NO,NO,NO,NO,NO,NO,NO,"","",N/A,"",0.300,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
+9,"Slit",SLIT,34.500,0.300,0.900,34.050,34.950,NO,NO,NO,YES,YES,NO,NO,"","",1.800,"XBPM",0.310,0.000,,,"",,"",,,"","","","",1.2,10.9,0.0,9.0,"Open Beamline"
+10,"XBPM",XBPM,37.000,0.425,0.500,36.750,37.250,NO,YES,NO,YES,NO,NO,NO,"","",0.000,"Screen",0.341,0.000,,,"",,"",,,"","","","",-4.6,11.4,-4.9,10.8,"Open Beamline"
+11,"Screen",SCREEN,37.500,0.600,0.500,37.250,37.750,NO,YES,NO,YES,NO,NO,NO,"","",0.650,"Sample",0.347,0.000,,,"",,"",,,"","","","",7.4,12.9,5.1,14.3,"Open Beamline"
+12,"Sample",SAMPLE,39.000,0.600,1.200,38.400,39.600,NO,NO,NO,YES,NO,NO,NO,"","",-1.150,"Slit",0.366,0.000,,,"",,"",,,"YES","","","",16.9,-1.4,13.7,-2.7,"Open Beamline"
+13,"Slit",SLIT,38.900,0.300,0.900,38.450,39.350,NO,NO,NO,YES,YES,NO,NO,"","",-0.350,"Movable Detector",0.365,0.000,,,"",,"",,,"","","","",-5.1,6.6,-3.0,8.5,"Open Beamline"
+14,"Movable Detector",DETECTOR,45.000,1.050,12.000,39.000,51.000,NO,YES,NO,YES,NO,NO,YES,"","",-1.625,"Detector",0.441,0.000,,,"",,"",,,"Silicon Detector","YES","YES","",0.6,16.9,-0.3,18.6,"Open Beamline"
+15,"Detector",DETECTOR,50.200,1.050,1.650,49.375,51.025,NO,NO,NO,NO,NO,NO,NO,"","",-6.025,"End of Beamline",0.506,0.000,,,"",,"",,,"Silicon Detector","NO","YES","",,,,,"Open Beamline"
