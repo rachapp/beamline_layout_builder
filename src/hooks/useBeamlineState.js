@@ -219,17 +219,6 @@ export const useBeamlineState = (computedItems) => {
     return true;
   };
 
-  const computedItemsRef = useRef(computedItems || []);
-  useEffect(() => {
-    if (computedItems && computedItems.length > 0) {
-      computedItemsRef.current = computedItems;
-    }
-  }, [computedItems]);
-
-  const setComputedItems = (ci) => {
-    computedItemsRef.current = ci;
-  };
-
   const focusItemTimerRef = useRef(null);
 
   const cancelFocusItem = () => {
