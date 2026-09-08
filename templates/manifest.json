@@ -1,0 +1,17 @@
+[
+  {
+    "name": "SPS-II_GIXRD_TRXRF",
+    "fileName": "SPS-II_GIXRD_TRXRF.csv",
+    "url": "./templates/SPS-II_GIXRD_TRXRF.csv"
+  },
+  {
+    "name": "SPS-II_HRXRD_MX",
+    "fileName": "SPS-II_HRXRD_MX.csv",
+    "url": "./templates/SPS-II_HRXRD_MX.csv"
+  },
+  {
+    "name": "SPS-II_SWAXS",
+    "fileName": "SPS-II_SWAXS.csv",
+    "url": "./templates/SPS-II_SWAXS.csv"
+  }
+]
