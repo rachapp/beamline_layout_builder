@@ -54,8 +54,8 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
 
     return (
       <div className="flex flex-col w-full h-full justify-between bg-transparent">
-        {/* Upper pole array */}
-        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden"
+        {/* Upper pole array (gap reduced by half: 30% -> 15%, poles 42.5% each) */}
+        <div className="flex w-full h-[42.5%] shadow-sm rounded-none overflow-hidden"
              style={{ border: `1.5px solid ${theme.compBorder}` }}>
           <div className="flex w-full h-full">
             {[...Array(totalPoles)].map((_, i) => (
@@ -66,7 +66,7 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
           </div>
         </div>
         {/* Lower pole array (phase-flipped: secondary first) */}
-        <div className="flex w-full h-[35%] shadow-sm rounded-none overflow-hidden"
+        <div className="flex w-full h-[42.5%] shadow-sm rounded-none overflow-hidden"
              style={{ border: `1.5px solid ${theme.compBorder}` }}>
           <div className="flex w-full h-full">
             {[...Array(totalPoles)].map((_, i) => (

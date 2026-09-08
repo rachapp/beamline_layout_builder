@@ -617,7 +617,7 @@ export const Viewport = ({
               if (showFootprintBox) {
                 defaultOffsetY = Math.max(defaultOffsetY, (footprintH / 2) + 8);
               }
-              if (item.type === 'SOURCE') defaultOffsetY = 24 + 8;
+              if (item.type === 'SOURCE') defaultOffsetY = (itemH / 2) + 8;
               if (item.type === 'WALL') defaultOffsetY = (itemH / 2) + 12;
               if (item.type === 'HUTCH') defaultOffsetY = -(itemH / 2) - 12;
 

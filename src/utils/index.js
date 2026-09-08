@@ -116,6 +116,18 @@ export const getItemVisualHeight = (item, viewType) => {
     const face = Math.max(4, (item.faceHeight !== undefined ? parseFloat(item.faceHeight) : 1.0) * PX_PER_M);
     return viewType === 'TOP' ? th : face;
   }
+  if (item.type === 'SOURCE') {
+    const sType = item.sourceType || 'Undulator';
+    if (sType === 'Bending Magnet') {
+      return viewType === 'SIDE' ? (item.dimY ?? conf.height ?? 24) : (item.dimZ ?? conf.height ?? 24);
+    }
+    // Undulator / Wiggler: top view height reduced by half of current (24px -> 12px)
+    if (viewType === 'TOP') {
+      const baseH = item.dimZ ?? conf.height ?? 24;
+      return baseH / 2;
+    }
+    return item.dimY ?? conf.height ?? 24;
+  }
   return viewType === 'SIDE' ? (item.dimY ?? conf.height ?? 20) : (item.dimZ ?? conf.height ?? 20);
 };
 

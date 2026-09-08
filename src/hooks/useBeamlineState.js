@@ -930,7 +930,7 @@ export const useBeamlineState = (computedItems) => {
     let defaultY = isSimpleMirror ? itemH + 8 : (itemH / 2) + 8;
     if (item.type === 'HUTCH') defaultY = -(itemH / 2) - 12;
     if (item.type === 'WALL') defaultY = (itemH / 2) + 12;
-    if (item.type === 'SOURCE') defaultY = 24 + 8;
+    if (item.type === 'SOURCE') defaultY = (itemH / 2) + 8;
     const startOffsetX = item.labelOffsets?.[view]?.x !== undefined ? item.labelOffsets[view].x : (item.type === 'SOURCE' ? -((item.dimX ?? conf.width) / 2) : 0);
     const startOffsetY = item.labelOffsets?.[view]?.y !== undefined ? item.labelOffsets[view].y : defaultY;
     updateDraggingInfo({

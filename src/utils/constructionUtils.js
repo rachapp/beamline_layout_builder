@@ -1451,7 +1451,7 @@ export const generateCadSvg = (items = [], options = {}) => {
 
       const compHeightUnits = isRange 
         ? (viewHeight * 0.6) 
-        : (['VFM', 'HFM'].includes(item.type)
+        : (['VFM', 'HFM', 'SOURCE'].includes(item.type)
           ? ((getItemVisualHeight(item, vType) / PX_PER_M) * scale)
           : (TYPES[item.type]?.height ? (TYPES[item.type].height / PX_PER_M) * scale : 400 * (scale / 1000)));
 
