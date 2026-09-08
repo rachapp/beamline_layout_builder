@@ -685,7 +685,9 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
   // Process all items
   const schedule = sorted.map((item, idx) => {
     const bounds = getItemBoundsM(item);
-    const isOptical = !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+    const isAnchorType = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
+    const isVirtualAnchor = isAnchorType || item.detectorType === 'Virtual Anchor' || item.isInvisible;
+    const isOptical = !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && !isVirtualAnchor;
     if (isOptical) totalOpticalLength += bounds.len;
 
     // Determine enclosure containment
@@ -698,9 +700,6 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
         break;
       }
     }
-
-    const isAnchorType = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
-    const isVirtualAnchor = isAnchorType || item.detectorType === 'Virtual Anchor' || item.isInvisible;
 
     // Gap to next physical item in list (skipping virtual anchors)
     let gapToNext = null;

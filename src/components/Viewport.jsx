@@ -76,7 +76,12 @@ export const Viewport = ({
   const layoutItems = React.useMemo(() => {
     if (!showAnnotations) return [];
     const candidateItems = (computedItems || []).filter(
-      (item) => !item.isBranchHidden && !['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)
+      (item) => !item.isBranchHidden &&
+                !['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) &&
+                item.detectorType !== 'Virtual Anchor' &&
+                !item.isInvisible &&
+                !(item.type === 'ANCHOR_SIDE' && viewType === 'TOP') &&
+                !(item.type === 'ANCHOR_TOP' && viewType === 'SIDE')
     );
 
     const sortedAnnotations = candidateItems.map((item) => {
@@ -316,6 +321,9 @@ export const Viewport = ({
               <g className="annotations-lines-layer">
                 {layoutItems.map((annot) => {
                   const { item, isSelected, targetY, posX, badgeBottom, badgeY } = annot;
+                  if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
+                  if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
+                  if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
                   const strokeColor = isSelected ? '#3b82f6' : (isDarkMode ? '#475569' : '#cbd5e1');
                   return (
                     <g key={`annotation-lines-${item.id}`} opacity={isSelected ? 1 : 0.75}>
@@ -404,7 +412,7 @@ export const Viewport = ({
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 45 }}>
               {layoutItems.map((annot) => {
                 const { item, isSelected, posX, labelText, badgeWidth, badgeHeight, badgeY } = annot;
-                if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return null;
+                if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
                 if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
                 if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
                 const isEditingThis = editingAnnotation?.id === item.id;
