@@ -8,7 +8,6 @@ import { useBeamlineState } from './src/hooks/useBeamlineState';
 import { Sidebar } from './src/components/Sidebar';
 import { Viewport } from './src/components/Viewport';
 import { PropertiesWidget } from './src/components/PropertiesWidget';
-import { JsonModal } from './src/components/JsonModal';
 import { SettingsModal } from './src/components/SettingsModal';
 import { TableView } from './src/components/TableView';
 import { CadSvgExportModal } from './src/components/CadSvgExportModal';
@@ -59,7 +58,7 @@ export default function App() {
 
          {/* Export Table to CSV Button */}
          <button 
-           onClick={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)} 
+           onClick={() => downloadCsv(computedItems && computedItems.length > 0 ? computedItems : state.items, 'beamline_construction_schedule.csv', state.canvasLength)} 
            title="Export Construction Schedule Table to CSV (Excel compatible)" 
            className={`px-2.5 py-1.5 border shadow-sm rounded-none transition-colors flex items-center gap-1.5 text-xs font-bold ${theme.buttonBg} ${theme.text} hover:border-emerald-500 hover:text-emerald-500`}
          >
@@ -113,7 +112,6 @@ export default function App() {
         theme={theme}
         loadTemplate={state.loadTemplate}
         handleFitToScreen={state.handleFitToScreen}
-        handleOpenJsonModal={state.handleOpenJsonModal}
         handleClearAll={state.handleClearAll}
         showGrid={state.showGrid}
         setShowGrid={state.setShowGrid}
@@ -136,7 +134,11 @@ export default function App() {
         setIsTableOpen={state.setIsTableOpen}
         setIsCadExportOpen={state.setIsCadExportOpen}
         items={state.items}
-        onExportCsv={() => downloadCsv(state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
+        templateList={state.templateList}
+        refreshTemplates={state.refreshTemplates}
+        loadedFileName={state.loadedFileName}
+        setLoadedFileName={state.setLoadedFileName}
+        onExportCsv={() => downloadCsv(computedItems && computedItems.length > 0 ? computedItems : state.items, 'beamline_construction_schedule.csv', state.canvasLength)}
         onImportCsv={state.handleImportCsv}
       />
 
@@ -278,17 +280,6 @@ export default function App() {
         canvasSettings={state.canvasSettings}
         setCanvasSettings={state.setCanvasSettings}
         activeView={state.activeView}
-      />
-
-      {/* JSON DATA PORTAL MODAL */}
-      <JsonModal 
-        isJsonModalOpen={state.isJsonModalOpen}
-        setIsJsonModalOpen={state.setIsJsonModalOpen}
-        jsonText={state.jsonText}
-        setJsonText={state.setJsonText}
-        theme={theme}
-        isDarkMode={isDarkMode}
-        handleApplyJson={state.handleApplyJson}
       />
 
       {/* GLOBAL CANVAS SETTINGS MODAL */}

@@ -72,6 +72,11 @@ export const mapTemplateToItems = (templateData) => {
         dimY = parseFloat(item.housingHeight) * PX_PER_M;
         dimZ = parseFloat(item.housingHeight) * PX_PER_M;
       }
+    } else if (['VFM', 'HFM'].includes(item.type)) {
+      const substrateThickness = item.substrateThickness !== undefined ? parseFloat(item.substrateThickness) : 0.3;
+      const faceHeight = item.faceHeight !== undefined ? parseFloat(item.faceHeight) : 1.0;
+      item.substrateThickness = substrateThickness;
+      item.faceHeight = faceHeight;
     }
 
     return {
@@ -97,6 +102,23 @@ export const mapTemplateToItems = (templateData) => {
   }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
 };
 
+export const getItemVisualHeight = (item, viewType) => {
+  if (!item) return 20;
+  const conf = TYPES[item.type] || {};
+  if (item.type === 'XBPM') return conf.height || 8.5;
+  if (item.type === 'VFM') {
+    const th = Math.max(2, (item.substrateThickness !== undefined ? parseFloat(item.substrateThickness) : 0.3) * PX_PER_M);
+    const face = Math.max(4, (item.faceHeight !== undefined ? parseFloat(item.faceHeight) : 1.0) * PX_PER_M);
+    return viewType === 'SIDE' ? th : face;
+  }
+  if (item.type === 'HFM') {
+    const th = Math.max(2, (item.substrateThickness !== undefined ? parseFloat(item.substrateThickness) : 0.3) * PX_PER_M);
+    const face = Math.max(4, (item.faceHeight !== undefined ? parseFloat(item.faceHeight) : 1.0) * PX_PER_M);
+    return viewType === 'TOP' ? th : face;
+  }
+  return viewType === 'SIDE' ? (item.dimY ?? conf.height ?? 20) : (item.dimZ ?? conf.height ?? 20);
+};
+
 export const getDefaultColors = (type, isDarkMode, theme) => {
     switch(type) {
       case 'SOURCE': return { primary: '#ef4444', secondary: '#2563eb' };
@@ -112,6 +134,9 @@ export const getDefaultColors = (type, isDarkMode, theme) => {
       case 'VFM': case 'HFM': return { primary: theme.compBorder, secondary: isDarkMode ? '#475569' : '#cbd5e1' };
       case 'SAMPLE': return { primary: theme.compBorder, secondary: theme.compBorder };
       case 'DETECTOR': return { primary: theme.compBg, secondary: theme.compBorder };
+      case 'ANCHOR_SIDE': return { primary: '#0284c7', secondary: '#38bdf8' };
+      case 'ANCHOR_TOP': return { primary: '#8b5cf6', secondary: '#a78bfa' };
+      case 'ANCHOR': return { primary: '#3b82f6', secondary: '#60a5fa' };
       default: return { primary: theme.compBorder, secondary: theme.compBg };
     }
 };

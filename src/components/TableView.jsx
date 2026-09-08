@@ -62,8 +62,21 @@ export const TableView = ({
   const handleToggleAllFootprints = () => {
     const nextVal = !allFootprintsVisible;
     setItems(prev => prev.map(item => {
-      if (['WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) return item;
+      if (['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return item;
       return { ...item, showFootprint: nextVal };
+    }));
+  };
+
+  // Master show label toggle state
+  const allLabelsVisible = useMemo(() => {
+    return scheduleData.rows.length > 0 && scheduleData.rows.every(r => r.item.showLabel !== false);
+  }, [scheduleData]);
+
+  const handleToggleAllLabels = () => {
+    const nextVal = !allLabelsVisible;
+    setItems(prev => prev.map(item => {
+      if (['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return item;
+      return { ...item, showLabel: nextVal };
     }));
   };
 
@@ -156,24 +169,44 @@ export const TableView = ({
         if (value) updated.lockLength = false;
       } else if (field === 'showFootprint') {
         updated.showFootprint = value;
+      } else if (field === 'showLabel') {
+        updated.showLabel = value;
       } else if (field === 'height') {
-        if (!['SOURCE', 'DETECTOR'].includes(item.type)) return item;
+        if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE', 'WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) return item;
         const h = parseFloat(value) || 0;
         updated.height = h;
-        updated.y = 150 - h * PX_PER_M;
-        if (item.type === 'DETECTOR') updated.stayInPath = false;
+        if (['WALL', 'HUTCH'].includes(item.type)) {
+          updated.wallHeight = h;
+          updated.dimY = h * PX_PER_M;
+          updated.y = 200 - (h * PX_PER_M) / 2;
+        } else if (item.type === 'CHAMBER') {
+          updated.dimY = h * PX_PER_M;
+          updated.dimZ = h * PX_PER_M;
+          updated.y = 150 - h * PX_PER_M;
+        } else {
+          updated.y = 150 - h * PX_PER_M;
+          if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
+        }
       } else if (field === 'offset') {
-        if (!['SOURCE', 'DETECTOR'].includes(item.type)) return item;
+        if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(item.type)) return item;
         const o = parseFloat(value) || 0;
         updated.offset = o;
         updated.z = 150 + o * PX_PER_M;
-        if (item.type === 'DETECTOR') updated.stayInPath = false;
+        if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
       } else if (field === 'type') {
         updated.type = value;
         const conf = TYPES[value];
         if (conf) {
           if (!updated.customName) updated.customName = conf.name;
-          if (conf.defaultLength) {
+          if (['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(value)) {
+            updated.length = 0;
+            updated.physicalLength = 0;
+            updated.chamberLength = 0;
+            updated.showFootprint = false;
+            updated.showLabel = false;
+            updated.passLight = true;
+            updated.stayInPath = false;
+          } else if (conf.defaultLength) {
             updated.length = conf.defaultLength;
           }
         }
@@ -631,6 +664,19 @@ export const TableView = ({
                   <span>Box</span>
                 </div>
               </th>
+              {/* Show Label master toggle column */}
+              <th className="py-2 px-2 text-center w-14" title="Toggle label display on canvas">
+                <div className="flex items-center justify-center gap-1">
+                  <input 
+                    type="checkbox"
+                    checked={allLabelsVisible}
+                    onChange={handleToggleAllLabels}
+                    className="w-3.5 h-3.5 rounded cursor-pointer text-blue-600"
+                    title="Toggle labels display on all components"
+                  />
+                  <span>Label</span>
+                </div>
+              </th>
               <th className="py-2 px-3">Component Type</th>
               <th className="py-2 px-3">Tag / Name</th>
               <th className="py-2 px-3 text-right" title="Component centerline beamline coordinate">
@@ -667,7 +713,7 @@ export const TableView = ({
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="21" className="py-8 text-center opacity-60 font-bold">
+                <td colSpan="22" className="py-8 text-center opacity-60 font-bold">
                   No components match the current filter or search criteria.
                 </td>
               </tr>
@@ -695,7 +741,7 @@ export const TableView = ({
 
                     {/* Footprint Box Checkbox Toggle */}
                     <td className="py-2 px-2 text-center">
-                      {!['WALL', 'HUTCH', 'CHAMBER'].includes(row.type) ? (
+                      {!['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
                         <input 
                           type="checkbox" 
                           checked={Boolean(row.item.showFootprint)} 
@@ -703,6 +749,22 @@ export const TableView = ({
                           onChange={(e) => handleCellChange(row.id, 'showFootprint', e.target.checked)} 
                           className="w-3.5 h-3.5 rounded cursor-pointer text-blue-600" 
                           title={Boolean(row.item.showFootprint) ? "Hide dashed footprint box on canvas" : "Show dashed footprint box on canvas"} 
+                        />
+                      ) : (
+                        <span className="text-[9px] opacity-30 font-mono">-</span>
+                      )}
+                    </td>
+
+                    {/* Show Label Checkbox Toggle */}
+                    <td className="py-2 px-2 text-center">
+                      {!['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
+                        <input 
+                          type="checkbox" 
+                          checked={row.item.showLabel !== false} 
+                          onClick={(e) => e.stopPropagation()} 
+                          onChange={(e) => handleCellChange(row.id, 'showLabel', e.target.checked)} 
+                          className="w-3.5 h-3.5 rounded cursor-pointer text-blue-600" 
+                          title={row.item.showLabel !== false ? "Hide label on canvas" : "Show label on canvas"} 
                         />
                       ) : (
                         <span className="text-[9px] opacity-30 font-mono">-</span>
@@ -774,7 +836,9 @@ export const TableView = ({
 
                     {/* Physical Length L (m) Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap">
-                      {!['VDCM', 'HDCM', 'SCREEN', 'SLIT', 'XBPM'].includes(row.type) ? (
+                      {['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
+                        <span className="text-[10px] font-mono opacity-60">0.000</span>
+                      ) : !['VDCM', 'HDCM', 'SCREEN', 'SLIT', 'XBPM'].includes(row.type) ? (
                         <div className="inline-flex items-center gap-1 justify-end">
                           <BufferedNumberInput
                             step={0.05}
@@ -860,7 +924,7 @@ export const TableView = ({
                     {/* Elevation Height Y (m) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
-                        const canEditElevation = ['SOURCE', 'DETECTOR'].includes(row.type);
+                        const canEditElevation = ['SOURCE', 'DETECTOR', 'WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE'].includes(row.type);
                         return (
                           <BufferedNumberInput
                             step={0.05}
@@ -873,7 +937,7 @@ export const TableView = ({
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditElevation ? "Auto-calculated from beam path (editable on Source & Detector only)" : "Elevation Height Y (m)"}
+                            title={!canEditElevation ? "Elevation not applicable or auto-calculated" : "Elevation Height / Construction Height Y (m)"}
                           />
                         );
                       })()}
@@ -882,20 +946,20 @@ export const TableView = ({
                     {/* Lateral Offset Z (m) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
-                        const canEditElevation = ['SOURCE', 'DETECTOR'].includes(row.type);
+                        const canEditOffset = ['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(row.type);
                         return (
                           <BufferedNumberInput
                             step={0.05}
                             value={row.offset}
-                            disabled={!canEditElevation}
+                            disabled={!canEditOffset}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(val) => handleCellChange(row.id, 'offset', val)}
                             className={`w-16 text-right py-0.5 px-1 font-mono font-bold border rounded outline-none ${
-                              !canEditElevation 
+                              !canEditOffset 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditElevation ? "Auto-calculated from beam path (editable on Source & Detector only)" : "Lateral Offset Z (m)"}
+                            title={!canEditOffset ? "Lateral offset not applicable or auto-calculated" : "Lateral Offset Z (m)"}
                           />
                         );
                       })()}

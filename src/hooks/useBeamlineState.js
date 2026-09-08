@@ -1,10 +1,29 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
-import { mapTemplateToItems } from '../utils';
+import { mapTemplateToItems, getItemVisualHeight } from '../utils';
 import { calculateUpdatedBounds, getItemBoundsM, parseCsvToItems } from '../utils/constructionUtils';
 
 export const useBeamlineState = (computedItems) => {
-  const [items, setItems] = useState(() => mapTemplateToItems(templates["Single Branch"]));
+  const [items, setItems] = useState(() => {
+    try {
+      const templateKeys = Object.keys(templates);
+      if (templateKeys.length > 0) {
+        // Pick 'Single Branch' if it exists, otherwise the first template in the folder
+        const initialKey = templates["Single Branch"] ? "Single Branch" : templateKeys[0];
+        const defaultTemplate = templates[initialKey];
+        if (defaultTemplate?.rawCsv) {
+          const parsed = parseCsvToItems(defaultTemplate.rawCsv);
+          if (parsed && parsed.length > 0) return parsed;
+        }
+        if (Array.isArray(defaultTemplate)) {
+          return mapTemplateToItems(defaultTemplate);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load initial template:", e);
+    }
+    return [];
+  });
   const [selectedId, setSelectedId] = useState(null);
   const [draggingInfo, setDraggingInfo] = useState(null); 
   const draggingInfoRef = useRef(null);
@@ -37,17 +56,80 @@ export const useBeamlineState = (computedItems) => {
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showRuler, setShowRuler] = useState(true);
   const [showAnnotations, setShowAnnotations] = useState(true);
-  const [canvasLength, setCanvasLength] = useState(50);
+  const [canvasLength, setCanvasLength] = useState(() => {
+    try {
+      const templateKeys = Object.keys(templates);
+      if (templateKeys.length > 0) {
+        const initialKey = templates["Single Branch"] ? "Single Branch" : templateKeys[0];
+        const defaultTemplate = templates[initialKey];
+        if (defaultTemplate?.rawCsv) {
+          const lengthMatch = defaultTemplate.rawCsv.match(/Total Beamline Length:\s*([\d.]+)\s*m/i);
+          if (lengthMatch && !isNaN(parseFloat(lengthMatch[1])) && parseFloat(lengthMatch[1]) > 0) {
+            return parseFloat(lengthMatch[1]);
+          }
+        }
+      }
+    } catch (e) {}
+    return 60;
+  });
   const [showUI, setShowUI] = useState(true);
   const [activeView, setActiveView] = useState('BOTH'); 
   const [lastClickedView, setLastClickedView] = useState('SIDE');
-
-  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
-  const [jsonText, setJsonText] = useState("");
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTableOpen, setIsTableOpen] = useState(false);
   const [tableViewMode, setTableViewMode] = useState('split');
   const [isCadExportOpen, setIsCadExportOpen] = useState(false);
+  const [loadedFileName, setLoadedFileName] = useState('');
+  const [templateList, setTemplateList] = useState(() => {
+    return Object.keys(templates).map(k => ({
+      name: k,
+      fileName: templates[k]?.fileName || `${k}.csv`
+    }));
+  });
+
+  const refreshTemplates = async () => {
+    try {
+      let res = await fetch('./api/templates?t=' + Date.now());
+      if (!res.ok) {
+        res = await fetch('./templates/manifest.json?t=' + Date.now());
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setTemplateList(data);
+          return data;
+        }
+      }
+    } catch (e) {
+      try {
+        const res = await fetch('./templates/manifest.json?t=' + Date.now());
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setTemplateList(data);
+            return data;
+          }
+        }
+      } catch (err) {}
+    }
+    return templateList;
+  };
+
+  useEffect(() => {
+    refreshTemplates().then(list => {
+      if (list && list.length > 0) {
+        // Auto-load preferred template or first template from disk
+        const target = list.find(t => t.name === 'SPS-II_SWAXS') || list[0];
+        loadTemplate(target.fileName || `${target.name}.csv`);
+      }
+    });
+
+    if (typeof import.meta !== 'undefined' && import.meta.hot && typeof import.meta.hot.on === 'function') {
+      import.meta.hot.on('templates-updated', () => {
+        refreshTemplates();
+      });
+    }
+  }, []);
   const [canvasSettings, setCanvasSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('beamline_canvas_settings');
@@ -238,17 +320,14 @@ export const useBeamlineState = (computedItems) => {
 
   const focusItem = (targetItemOrId) => {
     if (editingLabelRef.current) return;
-    // Execute in double requestAnimationFrame to ensure the container clientWidth/Height account for
-    // the docked right Properties Widget (w-80 = 320px) which renders upon selection.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const topContainer = topScrollRef.current;
-        const sideContainer = sideScrollRef.current;
-        const activeContainer = (activeView === 'SIDE' ? sideContainer : topContainer)
-          || topContainer
-          || sideContainer;
+      const topContainer = topScrollRef.current;
+      const sideContainer = sideScrollRef.current;
+      const activeContainer = (activeView === 'SIDE' ? sideContainer : topContainer)
+        || topContainer
+        || sideContainer;
 
-        if (!activeContainer && !topContainer && !sideContainer) return;
+      if (!activeContainer && !topContainer && !sideContainer) return;
 
         const primaryContainer = activeContainer || topContainer || sideContainer;
         const containerW = primaryContainer.clientWidth;
@@ -273,8 +352,8 @@ export const useBeamlineState = (computedItems) => {
           : ((isRange || isSource)
             ? (item.dimX ?? conf.width ?? 40)
             : Math.max(6, physLenM * PX_PER_M));
-        const compH_side = item.dimY ?? conf.height ?? 20;
-        const compH_top = item.dimZ ?? conf.height ?? 20;
+        const compH_side = getItemVisualHeight(item, 'SIDE');
+        const compH_top = getItemVisualHeight(item, 'TOP');
 
         // 1. Calculate Component target center X in canvas space
         let targetCenterX = item.x ?? (ORIGIN_X + (item.distance || 0) * PX_PER_M);
@@ -368,7 +447,6 @@ export const useBeamlineState = (computedItems) => {
           TOP: { x: targetPanX, y: topPanY },
           SIDE: { x: targetPanX, y: sidePanY }
         });
-      });
     });
 
     return true;
@@ -415,6 +493,33 @@ export const useBeamlineState = (computedItems) => {
       clearTimeout(timerId);
     };
   }, []);
+
+  // Auto Fit-to-Screen when user switches view (TOP, BOTH, SIDE)
+  const isViewMountRef = useRef(true);
+  useEffect(() => {
+    if (isViewMountRef.current) {
+      isViewMountRef.current = false;
+      return;
+    }
+    let raf2 = null;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        handleFitToScreen();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [activeView]);
+
+  const handleSetActiveView = (newView) => {
+    if (activeView === newView) {
+      handleFitToScreen();
+    } else {
+      setActiveView(newView);
+    }
+  };
 
   const selectedItem = items.find(i => i.id === selectedId);
   const sourceItem = items.find(i => i.type === 'SOURCE') || {};
@@ -478,20 +583,25 @@ export const useBeamlineState = (computedItems) => {
           if (item.id !== selectedId) return item;
           if (item.isLocked) return item; // locked optics cannot be moved accidentally
 
-          // Only Source and Detector have editable elevation / offset; other optics auto-calculate from beam path
-          if (!['SOURCE', 'DETECTOR'].includes(item.type)) return item;
+          // Only Source, Detector, and Anchors have editable elevation / offset; other optics auto-calculate from beam path
+          if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return item;
 
           const comp = computedItemsRef.current?.find(c => c.id === item.id);
 
-          if (targetView === 'SIDE') {
-            // SIDE view: adjust height above beam, snapped to 0.1 m resolution
+          // For ANCHOR_SIDE: always adjust height (elevation)
+          // For ANCHOR_TOP: always adjust offset (lateral)
+          // For others: follow targetView
+          const adjustHeight = item.type === 'ANCHOR_SIDE' || (item.type !== 'ANCHOR_TOP' && targetView === 'SIDE');
+
+          if (adjustHeight) {
+            // SIDE view / Elevation: adjust height above beam, snapped to 0.1 m resolution
             const currentH = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.y !== undefined)
               ? parseFloat(((150 - comp.y) / PX_PER_M).toFixed(2))
               : (item.height !== undefined 
                 ? item.height 
                 : parseFloat(((150 - (item.y ?? 150)) / PX_PER_M).toFixed(2)));
             const baseH = Math.round(currentH * 10) / 10;
-            const newH = parseFloat((baseH + direction * step).toFixed(1));
+            const newH = parseFloat((baseH + direction * step).toFixed(2));
             const newY = 150 - newH * PX_PER_M;
             return { 
               ...item, 
@@ -500,14 +610,14 @@ export const useBeamlineState = (computedItems) => {
               ...(item.type === 'DETECTOR' ? { stayInPath: false } : {})
             };
           } else {
-            // TOP view: adjust lateral offset, snapped to 0.1 m resolution
+            // TOP view / Lateral offset: adjust lateral offset, snapped to 0.1 m resolution
             const currentO = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.z !== undefined)
               ? parseFloat((((comp.z) - 150) / PX_PER_M).toFixed(2))
               : (item.offset !== undefined 
                 ? item.offset 
                 : parseFloat((((item.z ?? 150) - 150) / PX_PER_M).toFixed(2)));
             const baseO = Math.round(currentO * 10) / 10;
-            const newO = parseFloat((baseO - direction * step).toFixed(1));
+            const newO = parseFloat((baseO - direction * step).toFixed(2));
             const newZ = 150 + newO * PX_PER_M;
             return { 
               ...item, 
@@ -547,13 +657,53 @@ export const useBeamlineState = (computedItems) => {
     }));
   };
 
-  const loadTemplate = (templateName) => {
-    const selectedTemplate = templates[templateName];
-    if (!selectedTemplate) return;
-    const newItems = mapTemplateToItems(selectedTemplate);
-    setItems(newItems);
-    setSelectedId(null);
-    requestAnimationFrame(() => handleFitToScreen(newItems));
+  const loadTemplate = async (templateNameOrFileName) => {
+    // 1. Try to fetch directly from API or static templates folder with cache-busting
+    try {
+      const found = templateList.find(t => 
+        t.name === templateNameOrFileName || 
+        t.fileName === templateNameOrFileName ||
+        t.fileName === `${templateNameOrFileName}.csv`
+      );
+      const fileName = found ? found.fileName : (templateNameOrFileName.endsWith('.csv') ? templateNameOrFileName : `${templateNameOrFileName}.csv`);
+      const urlsToTry = [
+        found?.url,
+        `./api/templates/file/${encodeURIComponent(fileName)}`,
+        `./templates/${encodeURIComponent(fileName)}`
+      ].filter(Boolean);
+
+      for (const url of urlsToTry) {
+        try {
+          const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`);
+          if (res.ok) {
+            const csvText = await res.text();
+            if (csvText && csvText.trim().length > 0 && !csvText.startsWith('<!DOCTYPE')) {
+              handleImportCsv(csvText);
+              setLoadedFileName(fileName);
+              return true;
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.warn("Direct template fetch failed, falling back to static:", e);
+    }
+
+    // 2. Bundled fallback
+    const selectedTemplate = templates[templateNameOrFileName] || Object.values(templates).find(t => t.fileName === templateNameOrFileName);
+    if (selectedTemplate?.rawCsv) {
+      handleImportCsv(selectedTemplate.rawCsv);
+      setLoadedFileName(selectedTemplate.fileName || `${templateNameOrFileName}.csv`);
+      return true;
+    }
+    if (Array.isArray(selectedTemplate)) {
+      const newItems = mapTemplateToItems(selectedTemplate);
+      setItems(newItems);
+      setSelectedId(null);
+      setLoadedFileName(templateNameOrFileName);
+      requestAnimationFrame(() => handleFitToScreen(newItems));
+      return true;
+    }
   };
 
   const handleClearAll = () => {
@@ -561,195 +711,7 @@ export const useBeamlineState = (computedItems) => {
       setItems([]);
       setSelectedId(null);
       setPlacingType(null);
-    }
-  };
-
-  const handleOpenJsonModal = () => {
-    const sortedItems = [...items].sort((a, b) => (a.distance || 0) - (b.distance || 0));
-    const cleanItems = sortedItems.map((item) => {
-      const conf = TYPES[item.type];
-      let defaultName = conf?.name || item.type;
-      if (item.type === 'SOURCE') defaultName = item.sourceType || 'Undulator';
-      if (item.type === 'DETECTOR') defaultName = item.detectorType || 'Detector';
-      const customName = item.customName || defaultName;
-      const bounds = getItemBoundsM(item);
-      const misc = getItemMiscParams(item);
-
-      const exportItem = {
-        type: item.type,
-        customName,
-        distance: bounds.dist,
-        physicalLength: bounds.physLen,
-        chamberLength: bounds.len,
-        start: bounds.start,
-        end: bounds.end,
-        height: item.height !== undefined ? parseFloat(Number(item.height).toFixed(3)) : 0,
-        offset: item.offset !== undefined ? parseFloat(Number(item.offset).toFixed(3)) : 0,
-        showLabel: item.showLabel !== false,
-        showFootprint: Boolean(item.showFootprint),
-        showFootprintText: Boolean(item.showFootprintText),
-        isLocked: Boolean(item.isLocked),
-        freeDownstream: Boolean(item.freeDownstream),
-        miscA: misc.miscA ?? '',
-        miscB: misc.miscB ?? '',
-        miscC: misc.miscC ?? '',
-        miscD: misc.miscD ?? '',
-        labelX: misc.labelX ?? 0,
-        labelY: misc.labelY ?? 0,
-        labelSideX: misc.labelSideX ?? 0,
-        labelSideY: misc.labelSideY ?? 0,
-        labelTopX: misc.labelTopX ?? 0,
-        labelTopY: misc.labelTopY ?? 0,
-        labelOffsets: item.labelOffsets || {
-          SIDE: { x: misc.labelSideX ?? 0, y: misc.labelSideY ?? 0 },
-          TOP: { x: misc.labelTopX ?? 0, y: misc.labelTopY ?? 0 }
-        }
-      };
-
-      if (item.type === 'WALL') {
-        exportItem.wallWidth = item.wallWidth ?? (item.dimZ ? item.dimZ / PX_PER_M : 7.0);
-        exportItem.wallHeight = item.wallHeight ?? (item.height ?? 7.0);
-      }
-      if (['VDCM', 'HDCM'].includes(item.type)) {
-        exportItem.exitOffset = item.exitOffset ?? 0.5;
-        exportItem.braggAngle = item.braggAngle ?? 20;
-        exportItem.crystal1Length = item.crystal1Length ?? TYPES[item.type].defaultCrystal1Length;
-        exportItem.crystal2Length = item.crystal2Length ?? TYPES[item.type].defaultCrystal2Length;
-        if (item.housingLength !== undefined) exportItem.housingLength = item.housingLength;
-        if (item.housingHeight !== undefined) exportItem.housingHeight = item.housingHeight;
-      }
-      if (item.type === 'GRATING') {
-        exportItem.orientation = item.orientation || 'Vertical';
-        exportItem.diffractAngle = item.diffractAngle ?? 15;
-        exportItem.tiltAngle = item.tiltAngle ?? 0;
-      }
-      if (item.type === 'SOURCE') {
-        exportItem.sourceType = item.sourceType || 'Undulator';
-        exportItem.rayColor = item.rayColor || '#ef4444';
-        exportItem.rayWidth = item.rayWidth ?? 1.5;
-        exportItem.rayStyle = item.rayStyle || 'dashed';
-        exportItem.animate = item.animate !== false;
-        exportItem.showArrow = item.showArrow !== false;
-      }
-      if (item.type === 'DETECTOR') {
-        exportItem.detectorType = item.detectorType || 'Silicon Detector';
-        exportItem.passLight = item.passLight === true;
-        exportItem.stayInPath = item.stayInPath !== false;
-      }
-      if (item.type === 'SAMPLE') {
-        exportItem.passLight = item.passLight !== false;
-      }
-      if (item.primaryColor) exportItem.primaryColor = item.primaryColor;
-      if (item.secondaryColor) exportItem.secondaryColor = item.secondaryColor;
-      return exportItem;
-    });
-    const formattedJson = "[\n  " + cleanItems.map(item => JSON.stringify(item)).join(",\n  ") + "\n]";
-    setJsonText(formattedJson);
-    setIsJsonModalOpen(true);
-  };
-
-  const handleApplyJson = () => {
-    try {
-      const parsed = JSON.parse(jsonText);
-      if (!Array.isArray(parsed)) throw new Error("JSON must be an array of components.");
-      const newItems = parsed.map((item, idx) => {
-        const compType = item.type || 'SLIT';
-        const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(compType);
-        const conf = TYPES[compType] || { defaultLength: 1.0, width: 20 };
-        const dist = item.distance !== undefined && !isNaN(parseFloat(item.distance)) ? parseFloat(item.distance) : 0;
-        
-        let physLen = conf.defaultLength || 1.0;
-        if (item.physicalLength !== undefined && !isNaN(parseFloat(item.physicalLength))) {
-          physLen = Math.max(0.01, parseFloat(item.physicalLength));
-        } else if (item.length !== undefined && !isNaN(parseFloat(item.length))) {
-          physLen = Math.max(0.01, parseFloat(item.length));
-        }
-
-        let startVal = item.start !== undefined && !isNaN(parseFloat(item.start)) ? parseFloat(item.start) : undefined;
-        let endVal = item.end !== undefined && !isNaN(parseFloat(item.end)) ? parseFloat(item.end) : undefined;
-        const boxLen = item.chamberLength !== undefined && !isNaN(parseFloat(item.chamberLength))
-          ? parseFloat(item.chamberLength)
-          : (isRange && startVal !== undefined && endVal !== undefined ? Math.abs(endVal - startVal) : (['VDCM', 'HDCM'].includes(compType) ? 1.5 : Math.max(physLen, physLen + 0.6)));
-
-        if (startVal === undefined || endVal === undefined) {
-          startVal = parseFloat((dist - boxLen / 2).toFixed(3));
-          endVal = parseFloat((dist + boxLen / 2).toFixed(3));
-        }
-
-        const height = item.height !== undefined && !isNaN(parseFloat(item.height)) ? parseFloat(item.height) : 0;
-        const offset = item.offset !== undefined && !isNaN(parseFloat(item.offset)) ? parseFloat(item.offset) : 0;
-
-        let wallW = item.wallWidth !== undefined && !isNaN(parseFloat(item.wallWidth))
-          ? parseFloat(item.wallWidth)
-          : (compType === 'WALL' && item.miscA !== undefined && !isNaN(parseFloat(item.miscA)) ? parseFloat(item.miscA) : (conf.height ? conf.height / PX_PER_M : 7.0));
-        let wallH = item.wallHeight !== undefined && !isNaN(parseFloat(item.wallHeight))
-          ? parseFloat(item.wallHeight)
-          : (compType === 'WALL' && item.miscB !== undefined && !isNaN(parseFloat(item.miscB)) ? parseFloat(item.miscB) : (height || (conf.height ? conf.height / PX_PER_M : 7.0)));
-
-        const dimX = isRange ? Math.abs(endVal - startVal) * PX_PER_M : physLen * PX_PER_M;
-        const dimY = compType === 'WALL' ? wallH * PX_PER_M : (isRange ? (conf.height || 20) : undefined);
-        const dimZ = compType === 'WALL' ? wallW * PX_PER_M : (isRange ? (conf.height || 20) : undefined);
-
-        const y = isRange ? (compType === 'CHAMBER' ? 150 - height * PX_PER_M : 200 - (wallH * PX_PER_M) / 2) : 150 - height * PX_PER_M;
-        const z = 150 + offset * PX_PER_M;
-
-        let processedItem = {
-          id: item.id || (Date.now() + idx),
-          type: compType,
-          customName: item.customName || conf.name,
-          distance: dist,
-          physicalLength: physLen,
-          length: physLen,
-          chamberLength: parseFloat(Math.abs(endVal - startVal).toFixed(3)),
-          start: startVal,
-          end: endVal,
-          freeDownstream: Boolean(item.freeDownstream),
-          showFootprint: Boolean(item.showFootprint),
-          showFootprintText: Boolean(item.showFootprintText),
-          isLocked: Boolean(item.isLocked),
-          showLabel: item.showLabel !== false,
-          height,
-          offset,
-          wallWidth: wallW,
-          wallHeight: wallH,
-          dimX,
-          dimY,
-          dimZ,
-          x: ORIGIN_X + dist * PX_PER_M,
-          y,
-          z
-        };
-
-        if (item.miscA !== undefined && item.miscA !== '') processedItem = setItemMiscParam(processedItem, 'miscA', item.miscA);
-        if (item.miscB !== undefined && item.miscB !== '') processedItem = setItemMiscParam(processedItem, 'miscB', item.miscB);
-        if (item.miscC !== undefined && item.miscC !== '') processedItem = setItemMiscParam(processedItem, 'miscC', item.miscC);
-        if (item.miscD !== undefined && item.miscD !== '') processedItem = setItemMiscParam(processedItem, 'miscD', item.miscD);
-        if (item.labelSideX !== undefined && item.labelSideX !== '') processedItem = setItemMiscParam(processedItem, 'labelSideX', item.labelSideX);
-        if (item.labelSideY !== undefined && item.labelSideY !== '') processedItem = setItemMiscParam(processedItem, 'labelSideY', item.labelSideY);
-        if (item.labelTopX !== undefined && item.labelTopX !== '') processedItem = setItemMiscParam(processedItem, 'labelTopX', item.labelTopX);
-        if (item.labelTopY !== undefined && item.labelTopY !== '') processedItem = setItemMiscParam(processedItem, 'labelTopY', item.labelTopY);
-        if (item.labelX !== undefined && item.labelX !== '') processedItem = setItemMiscParam(processedItem, 'labelX', item.labelX);
-        if (item.labelY !== undefined && item.labelY !== '') processedItem = setItemMiscParam(processedItem, 'labelY', item.labelY);
-        if (item.labelOffsets && typeof item.labelOffsets === 'object') {
-          processedItem.labelOffsets = { ...(processedItem.labelOffsets || {}), ...item.labelOffsets };
-        }
-
-        if (['VDCM', 'HDCM'].includes(compType)) {
-          const chLen = processedItem.chamberLength ?? 1.5;
-          processedItem.dimX = chLen * PX_PER_M;
-          processedItem.length = chLen;
-          processedItem.physicalLength = chLen;
-          processedItem.chamberLength = chLen;
-        }
-
-        return processedItem;
-      });
-      const sorted = newItems.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-      setItems(sorted);
-      setIsJsonModalOpen(false);
-      requestAnimationFrame(() => handleFitToScreen(sorted));
-    } catch (err) {
-      alert("Invalid JSON format: " + err.message);
+      setLoadedFileName('');
     }
   };
 
@@ -798,7 +760,18 @@ export const useBeamlineState = (computedItems) => {
         finalDimX = 2.0 * PX_PER_M;
       }
 
-      const isOptic = !isRange && !isChamber;
+      if (placingType === 'ANCHOR_SIDE' && view === 'TOP') return;
+      if (placingType === 'ANCHOR_TOP' && view === 'SIDE') return;
+
+      const isAnchor = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType);
+      const isOptic = !isRange && !isChamber && !isAnchor;
+      const initialHeight = placingType === 'ANCHOR_SIDE' || (placingType === 'ANCHOR' && view === 'SIDE')
+        ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2))
+        : (isOptic ? 0 : ((view === 'SIDE') ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0));
+      const initialOffset = placingType === 'ANCHOR_TOP' || (placingType === 'ANCHOR' && view === 'TOP')
+        ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2))
+        : (isOptic ? 0 : ((view === 'TOP') ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0));
+
       const newItem = { 
         id: Date.now(), 
         type: placingType, 
@@ -806,11 +779,11 @@ export const useBeamlineState = (computedItems) => {
         y: isOptic ? 150 : ((view === 'SIDE') ? rawSecondary : 150), 
         z: isOptic ? 150 : ((view === 'TOP') ? rawSecondary : 150),
         distance: newDistance,
-        height: isOptic ? 0 : ((view === 'SIDE') ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0),
-        offset: isOptic ? 0 : ((view === 'TOP') ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0),
+        height: initialHeight,
+        offset: initialOffset,
         customName: conf.name,
-        dimX: finalDimX,
-        showLabel: true,
+        dimX: isAnchor ? 8 : finalDimX,
+        showLabel: !isAnchor,
         showFootprint: false,
         showFootprintText: false,
         ...(placingType === 'SOURCE' ? { 
@@ -826,6 +799,8 @@ export const useBeamlineState = (computedItems) => {
           dimZ: 8.5
         } : {}),
         ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle, length: 1.5, physicalLength: 1.5, chamberLength: 1.5, dimY: 24, dimZ: 24 } : {}),
+        ...(placingType === 'VFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
+        ...(placingType === 'HFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
         ...(isRange ? { 
            start: parseFloat((newDistance - (conf.width / 2 / PX_PER_M)).toFixed(2)), 
            end: parseFloat((newDistance + (conf.width / 2 / PX_PER_M)).toFixed(2)),
@@ -835,7 +810,19 @@ export const useBeamlineState = (computedItems) => {
         } : {}),
         ...(placingType === 'GRATING' ? { orientation: 'Vertical', tiltAngle: 0, diffractAngle: 15 } : {}),
         ...(placingType === 'SAMPLE' ? { passLight: true } : {}),
-        ...(placingType === 'DETECTOR' ? { passLight: false, stayInPath: true, detectorType: 'Silicon Detector' } : {})
+        ...(placingType === 'DETECTOR' ? { passLight: false, stayInPath: true, detectorType: 'Silicon Detector' } : {}),
+        ...(isAnchor ? {
+          length: 0,
+          physicalLength: 0,
+          chamberLength: 0,
+          start: newDistance,
+          end: newDistance,
+          passLight: true,
+          stayInPath: false,
+          showLabel: false,
+          showFootprint: false,
+          showFootprintText: false
+        } : {})
       };
 
       setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
@@ -881,7 +868,7 @@ export const useBeamlineState = (computedItems) => {
       focusItemTimerRef.current = setTimeout(() => {
         focusItem(id);
         focusItemTimerRef.current = null;
-      }, 260);
+      }, 40);
       return;
     }
     const bounds = getItemBoundsM(item);
@@ -939,7 +926,7 @@ export const useBeamlineState = (computedItems) => {
     const conf = TYPES[item.type];
     const isGratingActive = item.type === 'GRATING' && ((view === 'SIDE' && (item.orientation || 'Vertical') === 'Vertical') || (view === 'TOP' && item.orientation === 'Horizontal'));
     const isSimpleMirror = (item.type === 'VFM' && view === 'SIDE') || (item.type === 'HFM' && view === 'TOP') || isGratingActive;
-    const itemH = view === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
+    const itemH = getItemVisualHeight(item, view);
     let defaultY = isSimpleMirror ? itemH + 8 : (itemH / 2) + 8;
     if (item.type === 'HUTCH') defaultY = -(itemH / 2) - 12;
     if (item.type === 'WALL') defaultY = (itemH / 2) + 12;
@@ -1030,8 +1017,8 @@ export const useBeamlineState = (computedItems) => {
       setItems(prevItems => prevItems.map(item => {
         if (item.id === currentDrag.id) {
           const isDetector = item.type === 'DETECTOR';
-          const isSideActive = ['WALL', 'HUTCH', 'CHAMBER', 'DETECTOR'].includes(item.type);
-          const isTopActive = ['WALL', 'HUTCH', 'CHAMBER', 'DETECTOR'].includes(item.type);
+          const isSideActive = ['WALL', 'HUTCH', 'CHAMBER', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE'].includes(item.type);
+          const isTopActive = ['WALL', 'HUTCH', 'CHAMBER', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(item.type);
           const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
           
           const newDistance = parseFloat(((rawX - ORIGIN_X) / PX_PER_M).toFixed(2));
@@ -1199,7 +1186,7 @@ export const useBeamlineState = (computedItems) => {
         focusItemTimerRef.current = setTimeout(() => {
           focusItem(targetId);
           focusItemTimerRef.current = null;
-        }, 350);
+        }, 40);
       }
       if (currentDrag.type === 'component') {
         setItems(prev => [...prev].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
@@ -1387,6 +1374,11 @@ export const useBeamlineState = (computedItems) => {
   };
 
   const handleImportCsv = (csvText) => {
+    // Restore total canvas / beamline length from CSV header comment if present
+    const lengthMatch = typeof csvText === 'string' && csvText.match(/Total Beamline Length:\s*([\d.]+)\s*m/i);
+    if (lengthMatch && !isNaN(parseFloat(lengthMatch[1])) && parseFloat(lengthMatch[1]) > 0) {
+      setCanvasLength(parseFloat(lengthMatch[1]));
+    }
     const importedItems = parseCsvToItems(csvText);
     if (importedItems && importedItems.length > 0) {
       setItems(importedItems);
@@ -1402,15 +1394,16 @@ export const useBeamlineState = (computedItems) => {
     editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos,
     zoom, setZoom, showGrid, setShowGrid, snapToGrid, setSnapToGrid, showRuler, setShowRuler,
     showAnnotations, setShowAnnotations,
-    canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView,
-    lastClickedView, setLastClickedView, isJsonModalOpen, setIsJsonModalOpen,
+    canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView: handleSetActiveView,
+    lastClickedView, setLastClickedView,
     isSettingsModalOpen, setIsSettingsModalOpen, canvasSettings, setCanvasSettings,
     isTableOpen, setIsTableOpen, tableViewMode, setTableViewMode, isCadExportOpen, setIsCadExportOpen,
-    jsonText, setJsonText, pan, setPan, sideViewRef, topViewRef, sideScrollRef, topScrollRef,
+    pan, setPan, sideViewRef, topViewRef, sideScrollRef, topScrollRef,
     selectedItem, sourceItem, canvasWidth, handleWheel, loadTemplate, handleClearAll,
-    handleOpenJsonModal, handleApplyJson, handleFitToScreen, focusItem, cancelFocusItem, handleBgPointerDown,
+    handleFitToScreen, focusItem, cancelFocusItem, handleBgPointerDown,
     handlePointerDown, handleResizePointerDown, handleLabelPointerDown, handlePointerMove,
     handlePointerUp, handleLabelDoubleClick, addItem, deleteSelected, updateItemProp,
-    handleImportCsv, setComputedItems
+    handleImportCsv, setComputedItems, templateList, refreshTemplates,
+    loadedFileName, setLoadedFileName
   };
 };

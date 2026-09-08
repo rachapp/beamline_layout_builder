@@ -1,6 +1,7 @@
-import templatesData from '../../templates.json' with { type: 'json' };
+import { csvTemplates } from './templates.js';
 
-export const templates = templatesData;
+export const templates = csvTemplates;
+export { csvTemplates };
 
 export const TYPES = {
   SOURCE: { id: 'SOURCE', name: 'Source', width: 40, height: 24, defaultLength: 2 },
@@ -13,11 +14,14 @@ export const TYPES = {
   HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140, defaultLength: 17 },
   VDCM: { id: 'VDCM', name: 'VDCM', width: 30, height: 24, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
   HDCM: { id: 'HDCM', name: 'HDCM', width: 30, height: 24, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
-  VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2 },
-  HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2 },
+  VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
+  HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 12, height: 12, defaultLength: 0.6 },
   SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 20, defaultLength: 0.6 },
-  DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 21, height: 28, defaultLength: 1.05 }
+  DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 21, height: 28, defaultLength: 1.05 },
+  ANCHOR_SIDE: { id: 'ANCHOR_SIDE', name: 'Side Anchor', width: 8, height: 8, defaultLength: 0 },
+  ANCHOR_TOP: { id: 'ANCHOR_TOP', name: 'Top Anchor', width: 8, height: 8, defaultLength: 0 },
+  ANCHOR: { id: 'ANCHOR', name: 'Virtual Anchor', width: 8, height: 8, defaultLength: 0 }
 };
 
 export const ORIGIN_X = 160; 

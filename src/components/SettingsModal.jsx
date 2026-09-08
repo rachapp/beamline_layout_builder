@@ -135,11 +135,12 @@ export const SettingsModal = ({
   const currentBold = canvasSettings?.labelBold ?? false;
 
   const presets = [
-    { label: 'XS (8px)', size: 8 },
-    { label: 'SM (10px)', size: 10 },
-    { label: 'MD (12px)', size: 12 },
-    { label: 'LG (14px)', size: 14 },
-    { label: 'XL (18px)', size: 18 },
+    { label: 'XXS (4px)', size: 4 },
+    { label: 'XS (6px)', size: 6 },
+    { label: 'SM (8px)', size: 8 },
+    { label: 'MD (10px)', size: 10 },
+    { label: 'LG (12px)', size: 12 },
+    { label: 'XL (16px)', size: 16 },
   ];
 
   return (
@@ -266,7 +267,7 @@ export const SettingsModal = ({
               <div className="flex items-center gap-3">
                 <input 
                   type="range" 
-                  min="7" 
+                  min="4" 
                   max="24" 
                   step="1"
                   value={currentTextSize}
@@ -275,10 +276,10 @@ export const SettingsModal = ({
                 />
                 <input 
                   type="number"
-                  min="7"
+                  min="4"
                   max="24"
                   value={currentTextSize}
-                  onChange={(e) => handleSettingChange('textSize', Math.max(7, Math.min(24, parseInt(e.target.value) || 10)))}
+                  onChange={(e) => handleSettingChange('textSize', Math.max(4, Math.min(24, parseInt(e.target.value) || 4)))}
                   className={`w-14 text-xs font-bold border rounded-none p-1 text-center outline-none ${theme.buttonBg} ${theme.text}`}
                 />
               </div>
@@ -412,7 +413,7 @@ export const SettingsModal = ({
             <div className="flex items-center gap-3">
               <input 
                 type="range" 
-                min="7" 
+                min="4" 
                 max="18" 
                 step="1"
                 value={currentAnnotSize}
@@ -421,10 +422,10 @@ export const SettingsModal = ({
               />
               <input 
                 type="number"
-                min="7"
+                min="4"
                 max="18"
                 value={currentAnnotSize}
-                onChange={(e) => handleSettingChange('annotationTextSize', Math.max(7, Math.min(18, parseInt(e.target.value) || 9)))}
+                onChange={(e) => handleSettingChange('annotationTextSize', Math.max(4, Math.min(18, parseInt(e.target.value) || 4)))}
                 className={`w-14 text-xs font-bold border rounded-none p-1 text-center outline-none ${theme.buttonBg} ${theme.text}`}
               />
             </div>
@@ -443,7 +444,7 @@ export const SettingsModal = ({
             <div className="flex items-center gap-3">
               <input 
                 type="range" 
-                min="8" 
+                min="4" 
                 max="16" 
                 step="1"
                 value={currentRulerSize}
@@ -452,10 +453,10 @@ export const SettingsModal = ({
               />
               <input 
                 type="number"
-                min="8"
+                min="4"
                 max="16"
                 value={currentRulerSize}
-                onChange={(e) => handleSettingChange('rulerTextSize', Math.max(8, Math.min(16, parseInt(e.target.value) || 10)))}
+                onChange={(e) => handleSettingChange('rulerTextSize', Math.max(4, Math.min(16, parseInt(e.target.value) || 4)))}
                 className={`w-14 text-xs font-bold border rounded-none p-1 text-center outline-none ${theme.buttonBg} ${theme.text}`}
               />
             </div>

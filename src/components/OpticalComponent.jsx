@@ -292,6 +292,23 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
     );
   }
   
+  if (type === 'ANCHOR' || type === 'ANCHOR_SIDE' || type === 'ANCHOR_TOP') {
+    return (
+      <svg 
+        width="100%" 
+        height="100%" 
+        viewBox="0 0 10 10" 
+        className="block"
+        style={{ overflow: 'visible' }}
+      >
+        <circle cx="5" cy="5" r="2.8" fill="none" stroke={primary} strokeWidth="0.75" opacity="0.85" />
+        <circle cx="5" cy="5" r="0.9" fill={secondary} opacity="0.95" />
+        <line x1="5" y1="0.5" x2="5" y2="9.5" stroke={primary} strokeWidth="0.6" opacity="0.75" />
+        <line x1="0.5" y1="5" x2="9.5" y2="5" stroke={primary} strokeWidth="0.6" opacity="0.75" />
+      </svg>
+    );
+  }
+
   if (type === 'DETECTOR') {
     const isBlocking = item.passLight !== true;
     const dType = item.detectorType || 'Silicon Detector';

@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
 import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
 import { getOpticPhysicalLengthM, getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
+import { getItemVisualHeight } from '../utils';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
@@ -91,9 +92,9 @@ export const Viewport = ({
         ? item.distance
         : (posX - ORIGIN_X) / PX_PER_M;
       const labelText = `${parseFloat(Number(distVal).toFixed(2))}m`;
-      const annotSize = canvasSettings?.annotationTextSize || 9;
-      const badgeWidth = Math.max(34, labelText.length * (annotSize * 0.7) + 8);
-      const badgeHeight = annotSize + 6;
+      const annotSize = canvasSettings?.annotationTextSize ?? 9;
+      const badgeWidth = Math.max(Math.round(annotSize * 3), Math.round(labelText.length * (annotSize * 0.72) + 6));
+      const badgeHeight = Math.max(8, annotSize + 4);
 
       return {
         item,
@@ -139,6 +140,37 @@ export const Viewport = ({
   }, [showAnnotations, computedItems, selectedId, viewType, canvasSettings]);
 
   const isPanning = draggingInfo?.type === 'pan' && draggingInfo?.view === viewType;
+  const isWheelingRef = useRef(false);
+  const wheelTimeoutRef = useRef(null);
+
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const prevTransformRef = useRef({ x: pan[viewType]?.x, y: pan[viewType]?.y, zoom });
+  const transitionTimerRef = useRef(null);
+
+  useEffect(() => {
+    const prev = prevTransformRef.current;
+    const curX = pan[viewType]?.x;
+    const curY = pan[viewType]?.y;
+    const curZoom = zoom;
+
+    const hasChanged = prev.x !== curX || prev.y !== curY || prev.zoom !== curZoom;
+    prevTransformRef.current = { x: curX, y: curY, zoom: curZoom };
+
+    if (hasChanged && !isPanning && !isWheelingRef.current && !draggingInfo) {
+      setIsTransitioning(true);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = setTimeout(() => {
+        setIsTransitioning(false);
+      }, 200);
+    }
+  }, [pan, zoom, viewType, isPanning, draggingInfo]);
+
+  useEffect(() => {
+    return () => {
+      if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    };
+  }, []);
 
   let strokeDasharray = 'none';
   if (rayStyle === 'dashed') strokeDasharray = '8,4';
@@ -180,14 +212,27 @@ export const Viewport = ({
           } catch (err) {}
           handlePointerUp();
         }}
-        onWheel={(e) => handleWheel(e, viewType, scrollRef)}
+        onWheel={(e) => {
+          isWheelingRef.current = true;
+          if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
+          wheelTimeoutRef.current = setTimeout(() => {
+            isWheelingRef.current = false;
+          }, 90);
+          handleWheel(e, viewType, scrollRef);
+        }}
       >
         <div 
           className="absolute inset-0"
+          onTransitionEnd={() => {
+            if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+            setIsTransitioning(false);
+          }}
           style={{
-            transform: `translate(${pan[viewType].x}px, ${pan[viewType].y}px) scale(${zoom})`,
+            transform: `translate(${Math.round(pan[viewType].x)}px, ${Math.round(pan[viewType].y)}px) scale(${zoom})`,
             transformOrigin: '0 0',
-            transition: isPanning ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)'
+            transition: isTransitioning && !isPanning && !isWheelingRef.current && !draggingInfo
+              ? 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+              : 'none'
           }}
         >
           <div style={{
@@ -251,7 +296,7 @@ export const Viewport = ({
                           <text 
                             x={x} y="52" 
                             fill={isDarkMode ? '#94a3b8' : '#475569'} 
-                            fontSize={canvasSettings?.rulerTextSize || 10} 
+                            fontSize={canvasSettings?.rulerTextSize ?? 10} 
                             fontFamily="sans-serif" 
                             fontWeight="bold" 
                             textAnchor="middle"
@@ -359,6 +404,9 @@ export const Viewport = ({
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 45 }}>
               {layoutItems.map((annot) => {
                 const { item, isSelected, posX, labelText, badgeWidth, badgeHeight, badgeY } = annot;
+                if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return null;
+                if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
+                if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
                 const isEditingThis = editingAnnotation?.id === item.id;
 
                 if (isEditingThis) {
@@ -428,7 +476,7 @@ export const Viewport = ({
                       left: `${posX}px`,
                       top: `${badgeY}px`,
                       transform: 'translate(-50%, 0)',
-                      fontSize: `${annot.annotSize || 9}px`,
+                      fontSize: `${annot.annotSize ?? 9}px`,
                       height: `${badgeHeight}px`,
                       lineHeight: `${badgeHeight - 2}px`,
                       minWidth: `${badgeWidth}px`,
@@ -477,7 +525,9 @@ export const Viewport = ({
             style={{ width: `${canvasWidth}px`, height: '1000px' }}
           >
             {computedItems.map((item) => {
-              const conf = TYPES[item.type];
+              if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
+              if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
+              const conf = TYPES[item.type] || { width: 8, height: 8 };
               const isSelected = selectedId === item.id;
               const isDraggingThis = draggingInfo?.id === item.id && draggingInfo.type === 'component';
               const isEditing = editingLabel?.id === item.id && (!editingLabel.view || editingLabel.view === viewType);
@@ -492,23 +542,26 @@ export const Viewport = ({
               const bounds = getItemBoundsM(item);
               const physLengthM = bounds.physLen;
 
+              const isAnchorType = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
+              const isVirtualAnchor = isAnchorType || (item.type === 'DETECTOR' && (item.detectorType === 'Virtual Anchor' || item.isInvisible));
+
               // Visual width of component graphic:
               // Physical length visualizes the optics itself on the canvas!
               // Range elements (WALL/HUTCH/CHAMBER) scale with their span.
               // SOURCE scales with its physical length.
               // DCM display box matches chamber/footprint box size:
-              const itemW = isDCM
-                ? Math.max(4, bounds.len * PX_PER_M)
-                : ((isRange || isSource)
-                  ? (item.dimX ?? conf.width)
-                  : Math.max(6, physLengthM * PX_PER_M));
-              const itemH = item.type === 'XBPM' 
-                ? conf.height 
-                : (viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height));
+              const itemW = isVirtualAnchor
+                ? 8
+                : (isDCM
+                  ? Math.max(4, bounds.len * PX_PER_M)
+                  : ((isRange || isSource)
+                    ? (item.dimX ?? conf.width)
+                    : Math.max(6, physLengthM * PX_PER_M)));
+              const itemH = isVirtualAnchor ? 8 : getItemVisualHeight(item, viewType);
 
               // Chamber footprint box envelope (dashed bounding box)
               const globalShowFootprints = canvasSettings?.showFootprintBoxes !== false;
-              const showFootprintBox = !isRange && Boolean(item.showFootprint) && globalShowFootprints;
+              const showFootprintBox = !isAnchorType && !isRange && !isVirtualAnchor && Boolean(item.showFootprint) && globalShowFootprints;
               const showFootprintText = item.showFootprintText !== false && canvasSettings?.showFootprintText !== false;
               const footprintW = Math.max(4, bounds.len * PX_PER_M);
               const footprintH = isDCM ? itemH : Math.max(itemH + 14, 28);
@@ -590,7 +643,7 @@ export const Viewport = ({
               const resizeHandlePos = viewType === 'SIDE' ? { right: '-6px', top: '-6px', cursor: 'nesw-resize' } : { right: '-6px', bottom: '-6px', cursor: 'nwse-resize' };
               
               const globalShowLabels = canvasSettings?.showLabels !== false;
-              const labelVisible = isEditing || (globalShowLabels && (item.showLabel !== false));
+              const labelVisible = !isAnchorType && (isEditing || (globalShowLabels && (item.showLabel !== false)));
 
               return (
                 <div
@@ -733,7 +786,7 @@ export const Viewport = ({
                         transform: 'translateX(-50%)',
                         left: labelOffsetX,
                         top: labelOffsetY,
-                        fontSize: `${canvasSettings?.textSize || 10}px`,
+                        fontSize: `${canvasSettings?.textSize ?? 10}px`,
                         fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
                         color: isDarkMode ? '#cbd5e1' : '#1e293b',
                         textShadow: isDarkMode ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 1px rgba(255,255,255,0.8)'
@@ -812,11 +865,11 @@ export const Viewport = ({
                           onKeyUp={(e) => e.stopPropagation()}
                           className="bg-white dark:bg-slate-800 border-2 border-blue-500 rounded px-2 py-0.5 outline-none text-center shadow-lg select-text ring-2 ring-blue-400/40"
                           style={{ 
-                            fontSize: `${canvasSettings?.textSize || 10}px`,
+                            fontSize: `${canvasSettings?.textSize ?? 10}px`,
                             fontWeight: canvasSettings?.labelBold ? '700' : 'normal',
                             color: isDarkMode ? '#60a5fa' : '#2563eb',
                             minWidth: '60px',
-                            width: `${Math.max(((editingLabel.text || '').length) * ((canvasSettings?.textSize || 10) * 0.75) + 24, 60)}px` 
+                            width: `${Math.max(((editingLabel.text || '').length) * ((canvasSettings?.textSize ?? 10) * 0.75) + 24, 60)}px` 
                           }}
                         />
                       ) : (
@@ -828,15 +881,15 @@ export const Viewport = ({
               );
             })}
 
-            {placingType && ghostPos?.view === viewType && (() => {
-               const conf = TYPES[placingType];
+            {placingType && ghostPos?.view === viewType && !(placingType === 'ANCHOR_SIDE' && viewType === 'TOP') && !(placingType === 'ANCHOR_TOP' && viewType === 'SIDE') && (() => {
+               const conf = TYPES[placingType] || { width: 8, height: 8 };
                const mockItem = { 
                  type: placingType, 
                  orientation: 'Vertical', 
                  tiltAngle: 45,
                  dimX: placingType === 'HUTCH' ? 200 : (placingType === 'WALL' ? 24 : conf.width),
-                 dimY: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : conf.height),
-                 dimZ: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : conf.height),
+                 dimY: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'HFM' ? 20 : conf.height)),
+                 dimZ: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'VFM' ? 20 : conf.height)),
                  passLight: true,
                  detectorType: 'Silicon Detector'
                };
@@ -850,8 +903,9 @@ export const Viewport = ({
                    transformOffset = 'translate(-100%, -50%)';
                }
 
-               const itemW = mockItem.dimX;
-               const itemH = placingType === 'XBPM' ? itemW : (viewType === 'SIDE' ? mockItem.dimY : mockItem.dimZ); 
+               const isAnchorPlacing = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType);
+               const itemW = isAnchorPlacing ? 8 : mockItem.dimX;
+               const itemH = isAnchorPlacing ? 8 : (placingType === 'XBPM' ? itemW : (viewType === 'SIDE' ? mockItem.dimY : mockItem.dimZ)); 
                
                const ghostDist = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(1));
                const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;

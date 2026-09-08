@@ -81,15 +81,29 @@ export const usePhysicsEngine = (items) => {
 
           let nextAnchor = null;
           for (let j = i + 1; j < tracedItems.length; j++) {
-            if (isBender(tracedItems[j].type) || tracedItems[j].type === 'DETECTOR') {
-              nextAnchor = tracedItems[j];
+            const cand = tracedItems[j];
+            const isMatchingAnchor = (plane === 'y' && (cand.type === 'ANCHOR_SIDE' || cand.type === 'ANCHOR')) ||
+                                     (plane === 'z' && (cand.type === 'ANCHOR_TOP' || cand.type === 'ANCHOR'));
+            if (isBender(cand.type) || isMatchingAnchor || cand.type === 'DETECTOR') {
+              nextAnchor = cand;
               break;
             }
           }
 
           if (nextAnchor) {
             const distDiff = Math.max(0.001, nextAnchor.distance - item.distance);
-            currSlope = (nextAnchor[plane] - hitVal) / distDiff;
+            let anchorTargetVal = nextAnchor[plane];
+            const isAnchorItem = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(nextAnchor.type);
+            if (isAnchorItem || (nextAnchor.type === 'DETECTOR' && (nextAnchor.stayInPath === false || nextAnchor.detectorType === 'Virtual Anchor'))) {
+              anchorTargetVal = plane === 'y'
+                ? (nextAnchor.height !== undefined ? 150 - nextAnchor.height * PX_PER_M : (nextAnchor.y ?? 150))
+                : (nextAnchor.offset !== undefined ? 150 + nextAnchor.offset * PX_PER_M : (nextAnchor.z ?? 150));
+            } else if (anchorTargetVal === undefined) {
+              anchorTargetVal = plane === 'y'
+                ? 150 - (nextAnchor.height ?? 0) * PX_PER_M
+                : 150 + (nextAnchor.offset ?? 0) * PX_PER_M;
+            }
+            currSlope = (anchorTargetVal - hitVal) / distDiff;
           }
           currVal = hitVal;
           prevDist = item.distance;
@@ -113,12 +127,28 @@ export const usePhysicsEngine = (items) => {
           const hitVal = currVal + currSlope * (item.distance - prevDist);
           if (beamActive) tPoints.push({ x: item.x, [plane]: hitVal, parentId: item.id, sub: 0 });
           
-          const isFixedDetector = item.type === 'DETECTOR' && item.stayInPath === false;
-          const planeVal = isFixedDetector
-            ? (item[plane] !== undefined 
-                ? item[plane] 
-                : (plane === 'y' ? 150 - (item.height ?? 0) * PX_PER_M : 150 + (item.offset ?? 0) * PX_PER_M))
-            : hitVal;
+          const isFixedAnchor = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
+          const isFixedDetector = isFixedAnchor || (item.type === 'DETECTOR' && (item.stayInPath === false || item.detectorType === 'Virtual Anchor'));
+          let planeVal = hitVal;
+          if (isFixedAnchor) {
+            if (item.type === 'ANCHOR_SIDE') {
+              planeVal = plane === 'y' 
+                ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
+                : hitVal;
+            } else if (item.type === 'ANCHOR_TOP') {
+              planeVal = plane === 'z'
+                ? (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150))
+                : hitVal;
+            } else {
+              planeVal = plane === 'y'
+                ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
+                : (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150));
+            }
+          } else if (isFixedDetector) {
+            planeVal = plane === 'y'
+              ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
+              : (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150));
+          }
 
           cItemsMap[item.id] = { ...item, [plane]: planeVal };
           
@@ -130,7 +160,7 @@ export const usePhysicsEngine = (items) => {
           cItemsMap[item.id].slope = currSlope;
         }
 
-        if ((item.type === 'SAMPLE' && item.passLight === false) || (item.type === 'DETECTOR' && item.passLight !== true)) {
+        if ((item.type === 'SAMPLE' && item.passLight === false) || (item.type === 'DETECTOR' && item.passLight !== true && item.detectorType !== 'Virtual Anchor')) {
            beamActive = false; 
         }
       }
