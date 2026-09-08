@@ -329,7 +329,7 @@ export const getItemMiscParams = (item, activeView) => {
     miscC = item.tiltAngle ?? 0;
     miscD = item.miscD ?? '';
   } else if (['VFM', 'HFM'].includes(type)) {
-    miscA = item.physicalDistance ?? item.mirrorLength ?? item.physicalLength ?? 1.0;
+    miscA = item.physicalLength ?? item.length ?? (item.dimX ? item.dimX / PX_PER_M : 1.0);
     miscB = item.grazingAngle ?? item.deflectAngle ?? 0;
     miscC = item.focalLength ?? '';
     miscD = item.substrateThickness !== undefined ? item.substrateThickness : (item.miscD !== undefined ? item.miscD : 0.3);
@@ -510,9 +510,13 @@ export const setItemMiscParam = (item, key, val, activeView) => {
     else if (type === 'GRATING') updated.orientation = val;
     else if (['VFM', 'HFM'].includes(type)) {
       const num = parseFloat(val) || 0;
-      updated.physicalDistance = num;
-      updated.mirrorLength = num;
-      if (num > 0) updated.physicalLength = num;
+      if (num > 0) {
+        updated.physicalLength = num;
+        updated.length = num;
+        updated.dimX = num * PX_PER_M;
+      }
+      delete updated.physicalDistance;
+      delete updated.mirrorLength;
     }
     else if (type === 'SOURCE') {
       updated.sourceType = val;
@@ -1189,7 +1193,10 @@ export const parseCsvToItems = (csvText) => {
 
     // Apply miscellaneous parameters
     if (miscAIdx !== -1 && cols[miscAIdx] !== undefined && cols[miscAIdx] !== '') {
-      item = setItemMiscParam(item, 'miscA', cols[miscAIdx]);
+      // For VFM/HFM, do not let legacy miscA override the dedicated Optics Physical Length column
+      if (!['VFM', 'HFM'].includes(compType) || physLenIdx === -1 || isNaN(parseFloat(cols[physLenIdx]))) {
+        item = setItemMiscParam(item, 'miscA', cols[miscAIdx]);
+      }
     }
     if (miscBIdx !== -1 && cols[miscBIdx] !== undefined && cols[miscBIdx] !== '') {
       item = setItemMiscParam(item, 'miscB', cols[miscBIdx]);
@@ -1201,8 +1208,14 @@ export const parseCsvToItems = (csvText) => {
       item = setItemMiscParam(item, 'miscD', cols[miscDIdx]);
     }
 
-    // Mirror specifics (VFM / HFM): ensure proper substrateThickness and faceHeight
+    // Mirror specifics (VFM / HFM): ensure proper physicalLength, substrateThickness and faceHeight
     if (['VFM', 'HFM'].includes(compType)) {
+      // The dedicated Optics Physical Length column (physLen) is the authoritative source of truth!
+      item.physicalLength = physLen;
+      item.length = physLen;
+      item.dimX = physLen * PX_PER_M;
+      delete item.physicalDistance;
+      delete item.mirrorLength;
       const parsedTh = miscDIdx !== -1 && cols[miscDIdx] && !isNaN(parseFloat(cols[miscDIdx])) && parseFloat(cols[miscDIdx]) > 0
         ? parseFloat(cols[miscDIdx])
         : (item.substrateThickness ?? 0.3);
