@@ -1,14 +1,14 @@
 # Synchrotron Beamline - Construction & Spatial Guide
-# Generated: 9/9/2026, 1:31:02 PM
+# Generated: 9/9/2026, 7:39:49 PM
 # Total Beamline Length: 58 m | Components: 10
-Sequence #,Component Name,Type,Center Position X (m),Optics Physical Length (m),Chamber Footprint Length (m),Upstream Face X_start (m),Downstream Face X_end (m),Asymmetric Chamber,Show Footprint Box,Show Footprint Text,Show Label,Locked,Lock Length,Lock Center,Major Color,Minor Color,Clearance to Next (m),Next Component,Elevation Y (m),Lateral Offset Z (m),Wall/Enclosure Width (m),Wall/Enclosure Height (m),Ray Color,Ray Width,Ray Style,Show Ray Arrow,Animate Ray,Misc A,Misc B,Misc C,Misc D,Label Side X (px),Label Side Y (px),Label Top X (px),Label Top Y (px),Enclosure / Section
-1,"IVU19",SOURCE,0.000,2.000,1.653,-1.653,0.000,NO,NO,NO,YES,YES,NO,NO,"","",20.700,"Wall",1.200,0.000,,,"#ef4444",1.0,"dashed",NO,YES,"Undulator","19","87","dashed",,,,,"Open Beamline"
-2,"Wall",WALL,20.850,0.300,0.300,20.700,21.000,NO,NO,NO,YES,NO,YES,NO,"","",2.200,"BS",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
-3,"BS",GRATING,24.000,1.000,1.600,23.200,24.800,NO,NO,NO,YES,NO,NO,NO,"","",1.400,"BS",1.200,0.000,,,"",,"",,,"Horizontal","0","155","",,,,,"Open Beamline"
-4,"BS",GRATING,27.000,1.000,1.600,26.200,27.800,NO,NO,NO,YES,NO,NO,NO,"","",2.450,"Slit",1.200,0.000,,,"",,"",,,"Horizontal","0","35","",,,,,"Open Beamline"
-5,"Slit",SLIT,30.500,0.300,0.500,30.250,30.750,NO,YES,NO,NO,NO,NO,NO,"","",0.000,"FSM",1.200,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
-6,"FSM",SCREEN,31.000,0.600,0.500,30.750,31.250,NO,YES,NO,YES,NO,NO,NO,"","",0.032,"VDCM",1.200,0.000,,,"",,"",,,"","","","",0.9,15.1,,,"Open Beamline"
-7,"VDCM",VDCM,32.000,1.500,1.500,31.282,32.782,NO,YES,NO,YES,NO,NO,NO,"","",0.968,"XBPM",1.450,0.000,,,"",,"",,,"0.5","41.4","1","1",,,,,"Open Beamline"
-8,"XBPM",XBPM,34.000,0.425,0.500,33.750,34.250,NO,YES,NO,YES,NO,NO,NO,"","",0.000,"FSM",1.700,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
-9,"FSM",SCREEN,34.500,0.600,0.500,34.250,34.750,NO,YES,NO,NO,NO,NO,NO,"","",0.225,"Sample",1.700,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
-10,"Sample",SAMPLE,35.000,0.600,0.050,34.975,35.025,NO,YES,NO,YES,NO,NO,NO,"","",22.975,"End of Beamline",1.700,0.000,,,"",,"",,,"YES","","","",16.1,7.9,,,"Open Beamline"
+Sequence #,Component Name,Type,Center Position X (m),Optics Physical Length (m),Chamber Footprint Length (m),Upstream Face X_start (m),Downstream Face X_end (m),Asymmetric Chamber,Show Footprint Box,Show Footprint Text,Show Label,Locked,Lock Length,Lock Center,Major Color,Minor Color,Clearance to Next (m),Next Component,Elevation Y (mm),Lateral Offset Z (mm),Wall/Enclosure Width (m),Wall/Enclosure Height (m),Ray Color,Ray Width,Ray Style,Show Ray Arrow,Animate Ray,Misc A,Misc B,Misc C,Misc D,Label Side X (px),Label Side Y (px),Label Top X (px),Label Top Y (px),Enclosure / Section
+1,"IVU19",SOURCE,0.000,1.653,1.653,-1.653,0.000,NO,NO,NO,YES,YES,NO,NO,"","",20.700,"Wall",0.0,0.0,,,"#ef4444",1.0,"dashed",NO,YES,"Undulator","19","87","dashed",,,,,"Open Beamline"
+2,"Wall",WALL,20.850,0.300,0.300,20.700,21.000,NO,NO,NO,YES,NO,YES,NO,"","",2.200,"BS",-,-,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
+3,"BS",GRATING,24.000,1.000,1.600,23.200,24.800,NO,NO,NO,YES,NO,NO,NO,"","",1.400,"BS",0.0,0.0,,,"",,"",,,"Horizontal","0","155","",,,,,"Open Beamline"
+4,"BS",GRATING,27.000,1.000,1.600,26.200,27.800,NO,NO,NO,YES,NO,NO,NO,"","",2.450,"Slit",0.0,0.0,,,"",,"",,,"Horizontal","0","35","",,,,,"Open Beamline"
+5,"Slit",SLIT,30.500,0.300,0.500,30.250,30.750,NO,YES,NO,NO,NO,NO,NO,"","",0.000,"FSM",0.0,0.0,,,"",,"",,,"","","","",,,,,"Open Beamline"
+6,"FSM",SCREEN,31.000,0.600,0.500,30.750,31.250,NO,YES,NO,YES,NO,NO,NO,"","",0.250,"VDCM",0.0,0.0,,,"",,"",,,"","","","",0.9,15.1,,,"Open Beamline"
+7,"VDCM",VDCM,32.000,1.200,1.200,31.500,32.700,YES,YES,NO,YES,NO,NO,NO,"","",1.050,"XBPM",0.0,0.0,,,"",,"",,,"25","45","0.5","0.5",,,,,"Open Beamline"
+8,"XBPM",XBPM,34.000,0.425,0.500,33.750,34.250,NO,YES,NO,YES,NO,NO,NO,"","",0.000,"FSM",25.0,0.0,,,"",,"",,,"","","","",,,,,"Open Beamline"
+9,"FSM",SCREEN,34.500,0.600,0.500,34.250,34.750,NO,YES,NO,NO,NO,NO,NO,"","",0.225,"Sample",25.0,0.0,,,"",,"",,,"","","","",,,,,"Open Beamline"
+10,"Sample",SAMPLE,35.000,0.600,0.050,34.975,35.025,NO,YES,NO,YES,NO,NO,NO,"","",22.975,"End of Beamline",25.0,0.0,,,"",,"",,,"YES","","","",16.1,7.9,,,"Open Beamline"
