@@ -5,7 +5,7 @@ import {
   Sparkles, Check, ChevronDown, ChevronUp, Sliders, Box, GripHorizontal,
   Lock, Crosshair
 } from 'lucide-react';
-import { TYPES, PX_PER_M } from '../constants';
+import { TYPES, PX_PER_M, PX_PER_MM_V } from '../constants';
 import { computeConstructionSchedule, downloadCsv, getItemBoundsM, calculateUpdatedBounds, setItemMiscParam } from '../utils/constructionUtils';
 import { BufferedNumberInput, BufferedTextInput } from './BufferedNumberInput';
 
@@ -184,14 +184,14 @@ export const TableView = ({
           updated.dimZ = h * PX_PER_M;
           updated.y = 150 - h * PX_PER_M;
         } else {
-          updated.y = 150 - h * PX_PER_M;
+          updated.y = 150 - h * PX_PER_MM_V;
           if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
         }
       } else if (field === 'offset') {
         if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(item.type)) return item;
         const o = parseFloat(value) || 0;
         updated.offset = o;
-        updated.z = 150 + o * PX_PER_M;
+        updated.z = 150 + o * PX_PER_MM_V;
         if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
       } else if (field === 'type') {
         updated.type = value;
@@ -696,8 +696,8 @@ export const TableView = ({
               <th className="py-2 px-3 text-center bg-blue-500/10 font-black">
                 Clearance to Next (ΔX)
               </th>
-              <th className="py-2 px-3 text-right">Elevation Y (m)</th>
-              <th className="py-2 px-3 text-right">Offset Z (m)</th>
+              <th className="py-2 px-3 text-right">Elevation Y (mm)</th>
+              <th className="py-2 px-3 text-right">Offset Z (mm)</th>
               <th className="py-2 px-2 text-center" title="Misc Parameter A (Type-specific)">Misc A</th>
               <th className="py-2 px-2 text-center" title="Misc Parameter B (Type-specific)">Misc B</th>
               <th className="py-2 px-2 text-center" title="Misc Parameter C (Type-specific)">Misc C</th>
@@ -921,14 +921,17 @@ export const TableView = ({
                       )}
                     </td>
 
-                    {/* Elevation Height Y (m) Input */}
+                    {/* Elevation Height Y (mm) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
-                        const canEditElevation = ['SOURCE', 'DETECTOR', 'WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE'].includes(row.type);
+                        if (['WALL', 'HUTCH'].includes(row.type)) {
+                          return <span className="text-center font-mono opacity-50 block">-</span>;
+                        }
+                        const valMm = row.heightMm !== null && row.heightMm !== undefined ? Number(row.heightMm) : (row.height !== undefined ? Number(row.height) : 0);
                         return (
                           <BufferedNumberInput
-                            step={0.05}
-                            value={row.height}
+                            step={0.1}
+                            value={valMm}
                             disabled={!canEditElevation}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(val) => handleCellChange(row.id, 'height', val)}
@@ -937,20 +940,24 @@ export const TableView = ({
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditElevation ? "Elevation not applicable or auto-calculated" : "Elevation Height / Construction Height Y (m)"}
+                            title={!canEditElevation ? "Elevation auto-calculated from beam ray trace" : "Elevation Height Y (mm)"}
                           />
                         );
                       })()}
                     </td>
 
-                    {/* Lateral Offset Z (m) Input */}
+                    {/* Lateral Offset Z (mm) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
+                        if (['WALL', 'HUTCH'].includes(row.type)) {
+                          return <span className="text-center font-mono opacity-50 block">-</span>;
+                        }
                         const canEditOffset = ['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(row.type);
+                        const valMm = row.offsetMm !== null && row.offsetMm !== undefined ? Number(row.offsetMm) : (row.offset !== undefined ? Number(row.offset) : 0);
                         return (
                           <BufferedNumberInput
-                            step={0.05}
-                            value={row.offset}
+                            step={0.1}
+                            value={valMm}
                             disabled={!canEditOffset}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(val) => handleCellChange(row.id, 'offset', val)}
@@ -959,7 +966,7 @@ export const TableView = ({
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditOffset ? "Lateral offset not applicable or auto-calculated" : "Lateral Offset Z (m)"}
+                            title={!canEditOffset ? "Lateral offset auto-calculated from beam ray trace" : "Lateral Offset Z (mm)"}
                           />
                         );
                       })()}

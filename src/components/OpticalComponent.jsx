@@ -1,8 +1,8 @@
 import React from 'react';
-import { TYPES } from '../constants';
+import { TYPES, PX_PER_MM_V } from '../constants';
 import { getDefaultColors } from '../utils';
 
-export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints, theme, isDarkMode }) => {
+export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAnchorX, dcmAnchorY: propDcmAnchorY, viewType, tracePoints, theme, isDarkMode }) => {
   const type = item.type;
   const planeCoord = viewType === 'SIDE' ? 'y' : 'z';
   
@@ -188,30 +188,34 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
   
   if (type === 'VDCM' || type === 'HDCM') {
     const isInactive = (type === 'VDCM' && viewType === 'TOP') || (type === 'HDCM' && viewType === 'SIDE');
+    const localAnchorX = propDcmAnchorX ?? ((item.distance !== undefined && item.start !== undefined) ? (item.distance - item.start) * 20 : 10);
+    const localAnchorY = propDcmAnchorY ?? (isInactive ? 20 : 25);
+
     if (isInactive) {
       return (
-         <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none border" style={{ backgroundColor: theme.inactiveBg, borderColor: theme.inactiveBorder }}>
-           <div className="w-full h-[1.5px]" style={{ backgroundColor: theme.inactiveBorder }} />
+         <div className="w-full h-full relative shadow-sm opacity-90 rounded-none border" style={{ backgroundColor: theme.inactiveBg, borderColor: theme.inactiveBorder }}>
+           <div className="w-full h-[1.5px] absolute" style={{ top: `${localAnchorY}px`, backgroundColor: theme.inactiveBorder }} />
          </div>
       );
     }
 
     const conf = TYPES[type];
     const housingH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
-    const centerY = housingH / 2;
+    const centerY = localAnchorY;
     const itemW = propItemW ?? (item.dimX ?? conf.width);
 
     const parsedOffset = parseFloat(item.exitOffset);
-    const offset = !isNaN(parsedOffset) ? parsedOffset : 0.5;
+    const offset_mm = !isNaN(parsedOffset) ? (parsedOffset > 0 && parsedOffset <= 1.0 ? parsedOffset * 100 : parsedOffset) : 25;
+    const offset = offset_mm;
+    const D_px = offset_mm * PX_PER_MM_V;
     const parsedTheta = parseFloat(item.braggAngle);
-    const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 20;
+    const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 45;
     const theta_rad = theta_deg * Math.PI / 180;
     const tan2theta = Math.tan(2 * theta_rad);
-    const L = Math.abs(tan2theta) > 0.001 ? Math.abs((offset * 20) / tan2theta) : 40;
-    const localAnchorX = (itemW - L) / 2;
+    const L = Math.abs(theta_deg - 45) < 0.001 ? 0 : (Math.abs(tan2theta) > 0.001 ? Math.abs(D_px / tan2theta) : 0);
 
-    let c1Config = { left: localAnchorX, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
-    let c2Config = { left: localAnchorX + L, top: centerY, rot: 0, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
+    let c1Config = { left: localAnchorX, top: centerY, rot: -theta_rad, origin: '50% 0%', translate: 'translate(-50%, 0%)', justify: 'justify-end' };
+    let c2Config = { left: localAnchorX + L, top: centerY - D_px, rot: -theta_rad, origin: '50% 100%', translate: 'translate(-50%, -100%)', justify: 'justify-start' };
 
     if (tracePoints) {
       const idx1 = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 1);
@@ -226,7 +230,7 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
          c2Config.left = localAnchorX + (p2.x - item.x);
          c2Config.top = centerY + (p2[planeCoord] - item[planeCoord]);
 
-         const c1IsLower = offset > 0;
+         const c1IsLower = offset_mm > 0;
          
          if (c1IsLower) {
            c1Config.rot = -theta_rad;
@@ -253,8 +257,8 @@ export const OpticalComponent = ({ item, itemW: propItemW, viewType, tracePoints
     const crystalStyle = { border: `1.5px solid ${primary}`, backgroundColor: secondary };
     const hatchStyle = { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 2px, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'} 4px)`};
 
-    const c1Len = (item.crystal1Length ?? TYPES[type].defaultCrystal1Length) * 20; // 20px per meter
-    const c2Len = (item.crystal2Length ?? TYPES[type].defaultCrystal2Length) * 20;
+    const c1Len = (item.crystal1Length ?? TYPES[type]?.defaultCrystal1Length ?? 0.5) * 20; // 20px per meter
+    const c2Len = (item.crystal2Length ?? TYPES[type]?.defaultCrystal2Length ?? 0.5) * 20;
 
     return (
       <div 

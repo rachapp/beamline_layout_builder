@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2, Lock, Unlock, Crosshair, RotateCcw } from 'lucide-react';
-import { TYPES, PRESET_COLORS, PX_PER_M } from '../constants';
+import { TYPES, PRESET_COLORS, PX_PER_M, PX_PER_MM_V } from '../constants';
 import { getDefaultColors } from '../utils';
 import { getItemBoundsM, getOpticPhysicalLengthM, getItemMiscParams, setItemMiscParam } from '../utils/constructionUtils';
 import { BufferedNumberInput } from './BufferedNumberInput';
@@ -131,7 +131,7 @@ export const PropertiesWidget = ({
                 <span className="text-[9px] opacity-50 font-mono">← / → keys</span>
               </div>
               <BufferedNumberInput
-                step={0.05}
+                step={0.1}
                 value={selectedItem.distance ?? 0}
                 onChange={(val) => {
                   const num = parseFloat(val) || 0;
@@ -145,12 +145,12 @@ export const PropertiesWidget = ({
               />
             </div>
 
-            {/* Side Anchor: ONLY Height Y (Elevation) */}
+            {/* Side Anchor: ONLY Height Y (Elevation in mm) */}
             {(selectedItem.type === 'ANCHOR_SIDE' || selectedItem.type === 'ANCHOR') && (
               <div className="pt-2 border-t border-slate-500/20">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-[10px] font-bold uppercase text-sky-600 dark:text-sky-400">
-                    Elevation Height Y (m)
+                    Elevation Height Y (mm)
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] opacity-50 font-mono">↑ / ↓ keys</span>
@@ -160,7 +160,7 @@ export const PropertiesWidget = ({
                         updateItemProp('height', 0);
                         updateItemProp('y', 150);
                       }}
-                      title="Reset height to 0m"
+                      title="Reset height to 0 mm"
                       className="text-gray-400 hover:text-sky-500"
                     >
                       <RotateCcw size={10} />
@@ -168,25 +168,28 @@ export const PropertiesWidget = ({
                   </div>
                 </div>
                 <BufferedNumberInput
-                  step={0.05}
-                  value={selectedItem.height ?? 0}
+                  step={0.1}
+                  value={(() => {
+                    if (selectedItem.height === undefined || selectedItem.height === null) return 0;
+                    return Math.round(Number(selectedItem.height) * 10) / 10;
+                  })()}
                   onChange={(val) => {
                     const num = parseFloat(val) || 0;
                     updateItemProp('height', num);
-                    updateItemProp('y', 150 - num * PX_PER_M);
+                    updateItemProp('y', 150 - num * PX_PER_MM_V);
                   }}
                   className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                  title="Vertical elevation Y in meters in Side View (move with ↑ / ↓ keys)"
+                  title="Vertical elevation Y in millimeters in Side View (move with ↑ / ↓ keys)"
                 />
               </div>
             )}
 
-            {/* Top Anchor: ONLY Lateral Offset Z */}
+            {/* Top Anchor: ONLY Lateral Offset Z (mm) */}
             {(selectedItem.type === 'ANCHOR_TOP' || selectedItem.type === 'ANCHOR') && (
               <div className="pt-2 border-t border-slate-500/20">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-[10px] font-bold uppercase text-purple-600 dark:text-purple-400">
-                    Lateral Offset Z (m)
+                    Lateral Offset Z (mm)
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] opacity-50 font-mono">↑ / ↓ keys</span>
@@ -196,7 +199,7 @@ export const PropertiesWidget = ({
                         updateItemProp('offset', 0);
                         updateItemProp('z', 150);
                       }}
-                      title="Reset offset to 0m"
+                      title="Reset offset to 0 mm"
                       className="text-gray-400 hover:text-purple-500"
                     >
                       <RotateCcw size={10} />
@@ -204,15 +207,18 @@ export const PropertiesWidget = ({
                   </div>
                 </div>
                 <BufferedNumberInput
-                  step={0.05}
-                  value={selectedItem.offset ?? 0}
+                  step={0.1}
+                  value={(() => {
+                    if (selectedItem.offset === undefined || selectedItem.offset === null) return 0;
+                    return Math.round(Number(selectedItem.offset) * 10) / 10;
+                  })()}
                   onChange={(val) => {
                     const num = parseFloat(val) || 0;
                     updateItemProp('offset', num);
-                    updateItemProp('z', 150 + num * PX_PER_M);
+                    updateItemProp('z', 150 + num * PX_PER_MM_V);
                   }}
                   className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                  title="Lateral offset Z in meters in Top View (move with ↑ / ↓ keys)"
+                  title="Lateral offset Z in millimeters in Top View (move with ↑ / ↓ keys)"
                 />
               </div>
             )}
@@ -625,23 +631,29 @@ export const PropertiesWidget = ({
               );
             })()}
 
-            {/* Height Y and Offset Z */}
+            {/* Height Y and Offset Z (displayed in mm, 1 unit grid = 20px = 50mm) */}
             {(() => {
               const isElevationEditable = ['SOURCE', 'DETECTOR'].includes(selectedItem.type);
               const isDetectorInPath = selectedItem.type === 'DETECTOR' && selectedItem.stayInPath !== false;
-              const displayHeight = (isElevationEditable && !isDetectorInPath)
-                ? (selectedItem.height ?? 0)
-                : (selectedItem.y !== undefined ? parseFloat(((150 - selectedItem.y) / PX_PER_M).toFixed(3)) : (selectedItem.height ?? 0));
-              const displayOffset = (isElevationEditable && !isDetectorInPath)
-                ? (selectedItem.offset ?? 0)
-                : (selectedItem.z !== undefined ? parseFloat((((selectedItem.z) - 150) / PX_PER_M).toFixed(3)) : (selectedItem.offset ?? 0));
+              
+              const displayHeightMm = (isElevationEditable && !isDetectorInPath)
+                ? (selectedItem.height !== undefined 
+                    ? Math.round(Number(selectedItem.height) * 10) / 10
+                    : 0)
+                : (selectedItem.y !== undefined ? Math.round(((150 - selectedItem.y) / PX_PER_MM_V) * 10) / 10 : 0);
+
+              const displayOffsetMm = (isElevationEditable && !isDetectorInPath)
+                ? (selectedItem.offset !== undefined 
+                    ? Math.round(Number(selectedItem.offset) * 10) / 10
+                    : 0)
+                : (selectedItem.z !== undefined ? Math.round((((selectedItem.z) - 150) / PX_PER_MM_V) * 10) / 10 : 0);
 
               return (
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-500/20">
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className={`block text-[10px] font-bold uppercase ${!isElevationEditable ? 'opacity-60' : ''}`}>
-                        Height Y (m)
+                        Height Y (mm)
                       </label>
                       {isElevationEditable && (
                         <button
@@ -651,9 +663,10 @@ export const PropertiesWidget = ({
                               updateItemProp('stayInPath', true);
                             } else {
                               updateItemProp('height', 0);
+                              updateItemProp('y', 150);
                             }
                           }}
-                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset height to 0"}
+                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset height to 0 mm"}
                           className="text-gray-400 hover:text-blue-500"
                         >
                           <RotateCcw size={10} />
@@ -661,13 +674,13 @@ export const PropertiesWidget = ({
                       )}
                     </div>
                     <BufferedNumberInput
-                      step={0.05}
-                      value={displayHeight}
+                      step={0.1}
+                      value={displayHeightMm}
                       disabled={!isElevationEditable}
                       onChange={(val) => {
                         const num = parseFloat(val) || 0;
                         updateItemProp('height', num);
-                        updateItemProp('y', 150 - num * PX_PER_M);
+                        updateItemProp('y', 150 - num * PX_PER_MM_V);
                         if (selectedItem.type === 'DETECTOR') updateItemProp('stayInPath', false);
                       }}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${
@@ -675,13 +688,13 @@ export const PropertiesWidget = ({
                           ? 'opacity-60 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-gray-300 dark:border-slate-700' 
                           : `${theme.buttonBg} ${theme.text}`
                       }`}
-                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Elevation Height Y (m)"}
+                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Elevation Height Y (mm)"}
                     />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className={`block text-[10px] font-bold uppercase ${!isElevationEditable ? 'opacity-60' : ''}`}>
-                        Offset Z (m)
+                        Offset Z (mm)
                       </label>
                       {isElevationEditable && (
                         <button
@@ -694,7 +707,7 @@ export const PropertiesWidget = ({
                               updateItemProp('z', 150);
                             }
                           }}
-                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset offset to 0"}
+                          title={selectedItem.type === 'DETECTOR' ? "Snap back to beam path" : "Reset offset to 0 mm"}
                           className="text-gray-400 hover:text-blue-500"
                         >
                           <RotateCcw size={10} />
@@ -702,13 +715,13 @@ export const PropertiesWidget = ({
                       )}
                     </div>
                     <BufferedNumberInput
-                      step={0.05}
-                      value={displayOffset}
+                      step={0.1}
+                      value={displayOffsetMm}
                       disabled={!isElevationEditable}
                       onChange={(val) => {
                         const num = parseFloat(val) || 0;
                         updateItemProp('offset', num);
-                        updateItemProp('z', 150 + num * PX_PER_M);
+                        updateItemProp('z', 150 + num * PX_PER_MM_V);
                         if (selectedItem.type === 'DETECTOR') updateItemProp('stayInPath', false);
                       }}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${
@@ -716,7 +729,7 @@ export const PropertiesWidget = ({
                           ? 'opacity-60 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-gray-300 dark:border-slate-700' 
                           : `${theme.buttonBg} ${theme.text}`
                       }`}
-                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Lateral Offset Z (m)"}
+                      title={!isElevationEditable ? "Auto-calculated from beam ray trace (editable on Source & Detector only)" : "Lateral Offset Z (mm)"}
                     />
                   </div>
                   {!isElevationEditable && (
@@ -774,19 +787,26 @@ export const PropertiesWidget = ({
               <div className="space-y-2 pt-2 border-t border-slate-500/20">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase mb-1">Exit Offset (m)</label>
+                    <label className="block text-[10px] font-bold uppercase mb-1">Exit Offset (mm)</label>
                     <BufferedNumberInput
-                      step={0.01}
-                      value={selectedItem.exitOffset !== undefined && selectedItem.exitOffset !== null ? selectedItem.exitOffset : 0.5}
+                      step={1}
+                      value={(() => {
+                        const val = selectedItem.exitOffset;
+                        if (val === undefined || val === null) return 25;
+                        const num = parseFloat(val);
+                        if (isNaN(num)) return 25;
+                        return num;
+                      })()}
                       onChange={(val) => updateItemProp('exitOffset', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                      title="Beam exit offset in millimeters (shifts ray by offset / 100 grid units)"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase mb-1">Bragg Angle (°)</label>
                     <BufferedNumberInput
                       step={0.1}
-                      value={selectedItem.braggAngle !== undefined && selectedItem.braggAngle !== null ? selectedItem.braggAngle : 20}
+                      value={selectedItem.braggAngle !== undefined && selectedItem.braggAngle !== null ? selectedItem.braggAngle : 45}
                       onChange={(val) => updateItemProp('braggAngle', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                     />
@@ -800,7 +820,7 @@ export const PropertiesWidget = ({
                       <label className="block text-[10px] font-bold uppercase text-blue-500">Cryst 1 Len (m)</label>
                       <button
                         type="button"
-                        onClick={() => updateItemProp('crystal1Length', TYPES[selectedItem.type]?.defaultCrystal1Length || 1.0)}
+                        onClick={() => updateItemProp('crystal1Length', TYPES[selectedItem.type]?.defaultCrystal1Length || 0.5)}
                         title="Reset Crystal 1 length to default"
                         className="text-gray-400 hover:text-blue-500"
                       >
@@ -810,7 +830,7 @@ export const PropertiesWidget = ({
                     <BufferedNumberInput
                       step={0.05}
                       min={0.01}
-                      value={selectedItem.crystal1Length ?? TYPES[selectedItem.type]?.defaultCrystal1Length ?? 1.0}
+                      value={selectedItem.crystal1Length ?? TYPES[selectedItem.type]?.defaultCrystal1Length ?? 0.5}
                       onChange={(val) => updateItemProp('crystal1Length', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                     />
@@ -820,7 +840,7 @@ export const PropertiesWidget = ({
                       <label className="block text-[10px] font-bold uppercase text-blue-500">Cryst 2 Len (m)</label>
                       <button
                         type="button"
-                        onClick={() => updateItemProp('crystal2Length', TYPES[selectedItem.type]?.defaultCrystal2Length || 1.0)}
+                        onClick={() => updateItemProp('crystal2Length', TYPES[selectedItem.type]?.defaultCrystal2Length || 0.5)}
                         title="Reset Crystal 2 length to default"
                         className="text-gray-400 hover:text-blue-500"
                       >
@@ -830,7 +850,7 @@ export const PropertiesWidget = ({
                     <BufferedNumberInput
                       step={0.05}
                       min={0.01}
-                      value={selectedItem.crystal2Length ?? TYPES[selectedItem.type]?.defaultCrystal2Length ?? 1.0}
+                      value={selectedItem.crystal2Length ?? TYPES[selectedItem.type]?.defaultCrystal2Length ?? 0.5}
                       onChange={(val) => updateItemProp('crystal2Length', val)}
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
                     />
@@ -878,18 +898,49 @@ export const PropertiesWidget = ({
             )}
 
             {/* 4. MIRRORS (VFM / HFM) SPECIFIC */}
-            {['VFM', 'HFM'].includes(selectedItem.type) && (
-              <div className="space-y-2 pt-2 border-t border-slate-500/20">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase mb-1">Grazing / Deflect (°)</label>
-                    <BufferedNumberInput
-                      step={0.01}
-                      value={selectedItem.grazingAngle ?? selectedItem.deflectAngle ?? 0}
-                      onChange={(val) => updateItemProp('grazingAngle', val)}
-                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
-                    />
+            {['VFM', 'HFM'].includes(selectedItem.type) && (() => {
+              const grazingMrad = selectedItem.grazingAngleMrad !== undefined
+                ? Number(selectedItem.grazingAngleMrad)
+                : (selectedItem.grazingAngle !== undefined ? Number(selectedItem.grazingAngle) : 0);
+              const deflectMrad = selectedItem.deflectAngleMrad !== undefined
+                ? Number(selectedItem.deflectAngleMrad)
+                : (grazingMrad * 2);
+
+              return (
+                <div className="space-y-2 pt-2 border-t border-slate-500/20">
+                  {/* MIRROR ANGLE READOUT (in mrad) */}
+                  <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-none space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300">
+                        Mirror Angles
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 bg-sky-500/20 text-sky-700 dark:text-sky-200 rounded font-bold">
+                        mrad
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                      <div>
+                        <span className="block text-[9px] uppercase font-bold text-sky-800 dark:text-sky-200 opacity-75">
+                          Grazing (θ)
+                        </span>
+                        <span className="text-sm font-black font-mono text-sky-700 dark:text-sky-300">
+                          {grazingMrad.toFixed(2)} mrad
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] uppercase font-bold text-sky-800 dark:text-sky-200 opacity-75">
+                          Deflection (2θ)
+                        </span>
+                        <span className="text-sm font-black font-mono text-sky-700 dark:text-sky-300">
+                          {deflectMrad.toFixed(2)} mrad
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] opacity-70 italic leading-tight pt-0.5">
+                      * Calculated from ray deflection towards downstream anchor / detector.
+                    </p>
                   </div>
+
                   <div>
                     <label className="block text-[10px] font-bold uppercase mb-1">Focal Length (m)</label>
                     <BufferedNumberInput
@@ -900,70 +951,70 @@ export const PropertiesWidget = ({
                       className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
                     />
                   </div>
-                </div>
 
-                {/* MIRROR THICKNESS & FACE HEIGHT */}
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-500/20">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold uppercase text-blue-500">Thickness (m)</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateItemProp('substrateThickness', 0.3);
-                          updateItemProp('miscD', 0.3);
+                  {/* MIRROR THICKNESS & FACE HEIGHT */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-500/20">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold uppercase text-blue-500">Thickness (m)</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateItemProp('substrateThickness', 0.3);
+                            updateItemProp('miscD', 0.3);
+                          }}
+                          title="Reset substrate thickness to default (0.30 m)"
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
+                      </div>
+                      <BufferedNumberInput
+                        step={0.05}
+                        min={0.05}
+                        value={selectedItem.substrateThickness ?? 0.3}
+                        onChange={(val) => {
+                          const num = parseFloat(val);
+                          const v = !isNaN(num) && num > 0 ? num : 0.3;
+                          updateItemProp('substrateThickness', v);
+                          updateItemProp('miscD', v);
                         }}
-                        title="Reset substrate thickness to default (0.30 m)"
-                        className="text-gray-400 hover:text-blue-500"
-                      >
-                        <RotateCcw size={10} />
-                      </button>
+                        className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                        title="Substrate thickness (active deflection view: Side for VFM, Top for HFM)"
+                      />
                     </div>
-                    <BufferedNumberInput
-                      step={0.05}
-                      min={0.05}
-                      value={selectedItem.substrateThickness ?? 0.3}
-                      onChange={(val) => {
-                        const num = parseFloat(val);
-                        const v = !isNaN(num) && num > 0 ? num : 0.3;
-                        updateItemProp('substrateThickness', v);
-                        updateItemProp('miscD', v);
-                      }}
-                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                      title="Substrate thickness (active deflection view: Side for VFM, Top for HFM)"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold uppercase text-blue-500">Face Height (m)</label>
-                      <button
-                        type="button"
-                        onClick={() => updateItemProp('faceHeight', 1.0)}
-                        title="Reset face height to default (1.00 m)"
-                        className="text-gray-400 hover:text-blue-500"
-                      >
-                        <RotateCcw size={10} />
-                      </button>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold uppercase text-blue-500">Face Height (m)</label>
+                        <button
+                          type="button"
+                          onClick={() => updateItemProp('faceHeight', 1.0)}
+                          title="Reset face height to default (1.00 m)"
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
+                      </div>
+                      <BufferedNumberInput
+                        step={0.1}
+                        min={0.1}
+                        value={selectedItem.faceHeight ?? 1.0}
+                        onChange={(val) => {
+                          const num = parseFloat(val);
+                          const v = !isNaN(num) && num > 0 ? num : 1.0;
+                          updateItemProp('faceHeight', v);
+                        }}
+                        className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
+                        title="Optic face height / transverse aperture in inactive view (Side for HFM, Top for VFM)"
+                      />
                     </div>
-                    <BufferedNumberInput
-                      step={0.1}
-                      min={0.1}
-                      value={selectedItem.faceHeight ?? 1.0}
-                      onChange={(val) => {
-                        const num = parseFloat(val);
-                        const v = !isNaN(num) && num > 0 ? num : 1.0;
-                        updateItemProp('faceHeight', v);
-                      }}
-                      className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none font-mono ${theme.buttonBg} ${theme.text}`}
-                      title="Optic face height / transverse aperture in inactive view (Side for HFM, Top for VFM)"
-                    />
                   </div>
+                  <p className="text-[9px] opacity-60 italic leading-tight">
+                    * Thickness controls substrate thickness in deflecting plane. Face Height controls mirror body in pass-through plane.
+                  </p>
                 </div>
-                <p className="text-[9px] opacity-60 italic leading-tight">
-                  * Thickness controls substrate thickness in deflecting plane. Face Height controls mirror body in pass-through plane.
-                </p>
-              </div>
-            )}
+              );
+            })()}
 
             {/* 5. DETECTOR SPECIFIC */}
             {selectedItem.type === 'DETECTOR' && (

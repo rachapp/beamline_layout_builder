@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE, SNAP_STEP_M, SNAP_STEP_PX, templates } from '../constants';
 import { mapTemplateToItems, getItemVisualHeight } from '../utils';
 import { calculateUpdatedBounds, getItemBoundsM, parseCsvToItems } from '../utils/constructionUtils';
 
@@ -172,17 +172,17 @@ export const useBeamlineState = (computedItems) => {
           changed = true;
           return { ...item, length: 0.425, dimX: 8.5, dimY: 8.5, dimZ: 8.5 };
         }
-        if (['VDCM', 'HDCM'].includes(item.type) && (item.dimX === 160 || item.dimX > 50 || item.length > 3 || item.dimY === 60 || item.chamberLength === undefined)) {
+        if (['VDCM', 'HDCM'].includes(item.type) && (item.dimX === 160 || item.dimX > 50 || item.length > 3 || item.dimY === 60 || item.dimY === 50 || item.dimY === 24 || item.chamberLength === undefined)) {
           changed = true;
-          const chLen = (item.chamberLength && item.chamberLength <= 3) ? item.chamberLength : 1.5;
+          const chLen = (item.chamberLength && item.chamberLength <= 3) ? item.chamberLength : 1.2;
           return {
             ...item,
             length: chLen,
             physicalLength: chLen,
             chamberLength: chLen,
             dimX: chLen * PX_PER_M,
-            dimY: 24,
-            dimZ: 24
+            dimY: 40,
+            dimZ: 40
           };
         }
         return item;
@@ -360,13 +360,8 @@ export const useBeamlineState = (computedItems) => {
         if (isSource) {
           targetCenterX = targetCenterX - compW / 2;
         } else if (isDCM) {
-          const parsedD = parseFloat(item.exitOffset);
-          const d_m = !isNaN(parsedD) ? parsedD : 0.5;
-          const parsedTh = parseFloat(item.braggAngle);
-          const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
-          const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
-          const L = Math.abs(tan2th) > 0.001 ? Math.abs((d_m * PX_PER_M) / tan2th) : 40;
-          targetCenterX = targetCenterX + L / 2;
+          const bounds = getItemBoundsM(item);
+          targetCenterX = ORIGIN_X + ((bounds.start + bounds.end) / 2) * PX_PER_M;
         } else if (isRange && item.start !== undefined && item.end !== undefined) {
           targetCenterX = ORIGIN_X + ((parseFloat(item.start) + parseFloat(item.end)) / 2) * PX_PER_M;
         }
@@ -377,12 +372,7 @@ export const useBeamlineState = (computedItems) => {
           const surfaceZ = item.z !== undefined ? item.z : 150;
           targetCenterZ_top = surfaceZ + compH_top / 2;
         } else if (item.type === 'HDCM') {
-          if (item.z !== undefined) {
-            targetCenterZ_top = item.z;
-          } else {
-            const d_m = parseFloat(item.exitOffset) || 0.5;
-            targetCenterZ_top = 150 + (d_m * PX_PER_M) / 2;
-          }
+          targetCenterZ_top = item.z !== undefined ? item.z : 150;
         } else {
           targetCenterZ_top = item.z !== undefined
             ? item.z
@@ -397,12 +387,7 @@ export const useBeamlineState = (computedItems) => {
           const surfaceY = item.y !== undefined ? item.y : 150;
           targetCenterY_side = surfaceY + compH_side / 2;
         } else if (item.type === 'VDCM') {
-          if (item.y !== undefined) {
-            targetCenterY_side = item.y;
-          } else {
-            const d_m = parseFloat(item.exitOffset) || 0.5;
-            targetCenterY_side = 150 - (d_m * PX_PER_M) / 2;
-          }
+          targetCenterY_side = item.y !== undefined ? item.y : 150;
         } else {
           targetCenterY_side = item.y !== undefined
             ? item.y
@@ -593,16 +578,19 @@ export const useBeamlineState = (computedItems) => {
           // For others: follow targetView
           const adjustHeight = item.type === 'ANCHOR_SIDE' || (item.type !== 'ANCHOR_TOP' && targetView === 'SIDE');
 
+          const isAnchor = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
+          const stepMm = isAnchor ? (e.shiftKey ? 1.0 : 0.1) : (e.shiftKey ? 10 : 1);
+
           if (adjustHeight) {
-            // SIDE view / Elevation: adjust height above beam, snapped to 0.1 m resolution
-            const currentH = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.y !== undefined)
-              ? parseFloat(((150 - comp.y) / PX_PER_M).toFixed(2))
+            // SIDE view / Elevation: adjust height in mm (0.1 mm step for anchors, 1 mm for others)
+            const currentH_mm = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.y !== undefined)
+              ? parseFloat(((150 - comp.y) / PX_PER_MM_V).toFixed(1))
               : (item.height !== undefined 
-                ? item.height 
-                : parseFloat(((150 - (item.y ?? 150)) / PX_PER_M).toFixed(2)));
-            const baseH = Math.round(currentH * 10) / 10;
-            const newH = parseFloat((baseH + direction * step).toFixed(2));
-            const newY = 150 - newH * PX_PER_M;
+                ? Number(item.height)
+                : parseFloat(((150 - (item.y ?? 150)) / PX_PER_MM_V).toFixed(1)));
+            const baseH = Math.round(currentH_mm * 10) / 10;
+            const newH = parseFloat((baseH + direction * stepMm).toFixed(1));
+            const newY = 150 - newH * PX_PER_MM_V;
             return { 
               ...item, 
               height: newH, 
@@ -610,15 +598,15 @@ export const useBeamlineState = (computedItems) => {
               ...(item.type === 'DETECTOR' ? { stayInPath: false } : {})
             };
           } else {
-            // TOP view / Lateral offset: adjust lateral offset, snapped to 0.1 m resolution
-            const currentO = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.z !== undefined)
-              ? parseFloat((((comp.z) - 150) / PX_PER_M).toFixed(2))
+            // TOP view / Lateral offset in mm (0.1 mm step for anchors, 1 mm for others)
+            const currentO_mm = (item.type === 'DETECTOR' && item.stayInPath !== false && comp?.z !== undefined)
+              ? parseFloat((((comp.z) - 150) / PX_PER_MM_V).toFixed(1))
               : (item.offset !== undefined 
-                ? item.offset 
-                : parseFloat((((item.z ?? 150) - 150) / PX_PER_M).toFixed(2)));
-            const baseO = Math.round(currentO * 10) / 10;
-            const newO = parseFloat((baseO - direction * step).toFixed(2));
-            const newZ = 150 + newO * PX_PER_M;
+                ? Number(item.offset)
+                : parseFloat((((item.z ?? 150) - 150) / PX_PER_MM_V).toFixed(1)));
+            const baseO = Math.round(currentO_mm * 10) / 10;
+            const newO = parseFloat((baseO - direction * stepMm).toFixed(1));
+            const newZ = 150 + newO * PX_PER_MM_V;
             return { 
               ...item, 
               offset: newO, 
@@ -730,13 +718,13 @@ export const useBeamlineState = (computedItems) => {
 
         const rayCoord = 150;
         if (view === 'SIDE') {
-          const rawHeight = (rayCoord - rawSecondary) / PX_PER_M;
-          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayCoord - snappedHeight * PX_PER_M;
+          const rawHeightMm = (rayCoord - rawSecondary) / PX_PER_MM_V;
+          const snappedHeightMm = Math.round(rawHeightMm / 5) * 5;
+          rawSecondary = rayCoord - snappedHeightMm * PX_PER_MM_V;
         } else {
-          const rawOffset = (rawSecondary - rayCoord) / PX_PER_M;
-          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayCoord + snappedOffset * PX_PER_M;
+          const rawOffsetMm = (rawSecondary - rayCoord) / PX_PER_MM_V;
+          const snappedOffsetMm = Math.round(rawOffsetMm / 5) * 5;
+          rawSecondary = rayCoord + snappedOffsetMm * PX_PER_MM_V;
         }
       }
       const newDistance = parseFloat(((rawX - ORIGIN_X) / PX_PER_M).toFixed(2));
@@ -750,12 +738,12 @@ export const useBeamlineState = (computedItems) => {
       const h = conf.height / PX_PER_M;
       const isDCM = placingType === 'VDCM' || placingType === 'HDCM';
       const isChamber = placingType === 'CHAMBER';
-      const dOffset = isDCM ? 0.5 : 0;
-      const bAngle = isDCM ? 20 : 0;
+      const dOffset = isDCM ? 25 : 0;
+      const bAngle = isDCM ? 45 : 0;
       let finalDimX = conf.width;
 
       if (isDCM) {
-        finalDimX = 1.5 * PX_PER_M;
+        finalDimX = 1.2 * PX_PER_M;
       } else if (placingType === 'SOURCE') {
         finalDimX = 2.0 * PX_PER_M;
       }
@@ -765,19 +753,23 @@ export const useBeamlineState = (computedItems) => {
 
       const isAnchor = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType);
       const isOptic = !isRange && !isChamber && !isAnchor;
-      const initialHeight = placingType === 'ANCHOR_SIDE' || (placingType === 'ANCHOR' && view === 'SIDE')
-        ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2))
-        : (isOptic ? 0 : ((view === 'SIDE') ? parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2)) : 0));
-      const initialOffset = placingType === 'ANCHOR_TOP' || (placingType === 'ANCHOR' && view === 'TOP')
-        ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2))
-        : (isOptic ? 0 : ((view === 'TOP') ? parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2)) : 0));
+      const initialHeight = (placingType === 'ANCHOR_SIDE' || (placingType === 'ANCHOR' && view === 'SIDE'))
+        ? parseFloat(((150 - rawSecondary) / PX_PER_MM_V).toFixed(1))
+        : (isOptic ? 0 : ((view === 'SIDE') ? parseFloat(((150 - rawSecondary) / PX_PER_MM_V).toFixed(1)) : 0));
+      const initialOffset = (placingType === 'ANCHOR_TOP' || (placingType === 'ANCHOR' && view === 'TOP'))
+        ? parseFloat(((rawSecondary - 150) / PX_PER_MM_V).toFixed(1))
+        : (isOptic ? 0 : ((view === 'TOP') ? parseFloat(((rawSecondary - 150) / PX_PER_MM_V).toFixed(1)) : 0));
 
       const newItem = { 
         id: Date.now(), 
         type: placingType, 
         x: finalX, 
-        y: isOptic ? 150 : ((view === 'SIDE') ? rawSecondary : 150), 
-        z: isOptic ? 150 : ((view === 'TOP') ? rawSecondary : 150),
+        y: (placingType === 'ANCHOR_SIDE' || (placingType === 'ANCHOR' && view === 'SIDE'))
+          ? 150 - initialHeight * PX_PER_MM_V
+          : (isOptic ? 150 : ((view === 'SIDE') ? rawSecondary : 150)), 
+        z: (placingType === 'ANCHOR_TOP' || (placingType === 'ANCHOR' && view === 'TOP'))
+          ? 150 + initialOffset * PX_PER_MM_V
+          : (isOptic ? 150 : ((view === 'TOP') ? rawSecondary : 150)),
         distance: newDistance,
         height: initialHeight,
         offset: initialOffset,
@@ -798,7 +790,19 @@ export const useBeamlineState = (computedItems) => {
           dimY: 8.5,
           dimZ: 8.5
         } : {}),
-        ...(isDCM ? { exitOffset: dOffset, braggAngle: bAngle, length: 1.5, physicalLength: 1.5, chamberLength: 1.5, dimY: 24, dimZ: 24 } : {}),
+        ...(isDCM ? { 
+          exitOffset: dOffset, 
+          braggAngle: bAngle, 
+          length: 1.2, 
+          physicalLength: 1.2, 
+          chamberLength: 1.2, 
+          crystal1Length: 0.5, 
+          crystal2Length: 0.5, 
+          start: parseFloat((newDistance - 0.5).toFixed(3)), 
+          end: parseFloat((newDistance + 0.7).toFixed(3)), 
+          dimY: 40, 
+          dimZ: 40 
+        } : {}),
         ...(placingType === 'VFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
         ...(placingType === 'HFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
         ...(isRange ? { 
@@ -956,17 +960,17 @@ export const useBeamlineState = (computedItems) => {
         rawX = ORIGIN_X + snappedDist * PX_PER_M;
 
         const rayCoord = 150;
-        // SIDE view — snap height above beam
+        // SIDE view — snap height above beam (5 mm steps)
         if (view === 'SIDE') {
-          const rawHeight = (rayCoord - rawSecondary) / PX_PER_M;
-          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayCoord - snappedHeight * PX_PER_M;
+          const rawHeightMm = (rayCoord - rawSecondary) / PX_PER_MM_V;
+          const snappedHeightMm = Math.round(rawHeightMm / 5) * 5;
+          rawSecondary = rayCoord - snappedHeightMm * PX_PER_MM_V;
         }
-        // TOP view — snap lateral offset from beam
+        // TOP view — snap lateral offset from beam (5 mm steps)
         else {
-          const rawOffset = (rawSecondary - rayCoord) / PX_PER_M;
-          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayCoord + snappedOffset * PX_PER_M;
+          const rawOffsetMm = (rawSecondary - rayCoord) / PX_PER_MM_V;
+          const snappedOffsetMm = Math.round(rawOffsetMm / 5) * 5;
+          rawSecondary = rayCoord + snappedOffsetMm * PX_PER_MM_V;
         }
       }
       setGhostPos({ view, x: rawX, y: rawSecondary });
@@ -1002,15 +1006,15 @@ export const useBeamlineState = (computedItems) => {
         rawX = ORIGIN_X + snappedDist * PX_PER_M;
 
         const rayNominal = 150;
-        // SIDE view — snap height relative to branch ray
+        // SIDE view — snap height relative to branch ray (5 mm steps)
         if (view === 'SIDE') {
-          const rawHeight = (rayNominal - rawSecondary) / PX_PER_M;
-          const snappedHeight = Math.round(rawHeight / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayNominal - snappedHeight * PX_PER_M;
+          const rawHeightMm = (rayNominal - rawSecondary) / PX_PER_MM_V;
+          const snappedHeightMm = Math.round(rawHeightMm / 5) * 5;
+          rawSecondary = rayNominal - snappedHeightMm * PX_PER_MM_V;
         } else {
-          const rawOffset = (rawSecondary - rayNominal) / PX_PER_M;
-          const snappedOffset = Math.round(rawOffset / SNAP_STEP_M) * SNAP_STEP_M;
-          rawSecondary = rayNominal + snappedOffset * PX_PER_M;
+          const rawOffsetMm = (rawSecondary - rayNominal) / PX_PER_MM_V;
+          const snappedOffsetMm = Math.round(rawOffsetMm / 5) * 5;
+          rawSecondary = rayNominal + snappedOffsetMm * PX_PER_MM_V;
         }
       }
 
@@ -1037,8 +1041,8 @@ export const useBeamlineState = (computedItems) => {
               newY = item.y;
               newStayInPath = true;
             } else {
-              newHeight = parseFloat(((150 - rawSecondary) / PX_PER_M).toFixed(2));
-              newY = rawSecondary;
+              newHeight = parseFloat(((150 - rawSecondary) / PX_PER_MM_V).toFixed(1));
+              newY = 150 - newHeight * PX_PER_MM_V;
               if (isDetector && dyFromStart >= 8) {
                 newStayInPath = false;
               }
@@ -1053,8 +1057,8 @@ export const useBeamlineState = (computedItems) => {
               newZ = item.z;
               newStayInPath = true;
             } else {
-              newOffset = parseFloat(((rawSecondary - 150) / PX_PER_M).toFixed(2));
-              newZ = rawSecondary;
+              newOffset = parseFloat(((rawSecondary - 150) / PX_PER_MM_V).toFixed(1));
+              newZ = 150 + newOffset * PX_PER_MM_V;
               if (isDetector && dzFromStart >= 8) {
                 newStayInPath = false;
               }
@@ -1276,8 +1280,8 @@ export const useBeamlineState = (computedItems) => {
               if (comp) {
                 updated.y = comp.y;
                 updated.z = comp.z;
-                updated.height = parseFloat(((150 - comp.y) / PX_PER_M).toFixed(3));
-                updated.offset = parseFloat(((comp.z - 150) / PX_PER_M).toFixed(3));
+                updated.height = parseFloat(((150 - comp.y) / PX_PER_MM_V).toFixed(1));
+                updated.offset = parseFloat(((comp.z - 150) / PX_PER_MM_V).toFixed(1));
               }
             }
           } else if (propName === 'freeDownstream') {
@@ -1347,23 +1351,28 @@ export const useBeamlineState = (computedItems) => {
             updated.y = 200 - (h * PX_PER_M) / 2;
           } else if (propName === 'height' && !isNaN(val) && val !== '') {
             const h = Number(val);
-            if (['SOURCE', 'DETECTOR'].includes(i.type)) {
+            if (['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type)) {
               updated.height = h;
-              updated.y = 150 - (h * PX_PER_M);
-              if (i.type === 'DETECTOR') updated.stayInPath = false;
+              updated.y = 150 - (h * PX_PER_MM_V);
+              if (i.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type)) updated.stayInPath = false;
             } else if (['WALL', 'HUTCH'].includes(i.type)) {
               updated.height = h;
               updated.wallHeight = h;
               updated.dimY = h * PX_PER_M;
               if (updated.wallWidth === undefined) updated.dimZ = h * PX_PER_M;
               updated.y = 200 - (h * PX_PER_M) / 2;
+            } else if (i.type === 'CHAMBER') {
+              updated.height = h;
+              updated.dimY = h * PX_PER_M;
+              updated.dimZ = h * PX_PER_M;
+              updated.y = 150 - (h * PX_PER_M);
             }
           } else if (propName === 'offset' && !isNaN(val) && val !== '') {
-            if (['SOURCE', 'DETECTOR'].includes(i.type)) {
+            if (['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type)) {
               const o = Number(val);
               updated.offset = o;
-              updated.z = 150 + (o * PX_PER_M);
-              if (i.type === 'DETECTOR') updated.stayInPath = false;
+              updated.z = 150 + (o * PX_PER_MM_V);
+              if (i.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type)) updated.stayInPath = false;
             }
           }
           return updated;

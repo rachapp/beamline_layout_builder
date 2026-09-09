@@ -1,4 +1,4 @@
-import { TYPES, PX_PER_M, ORIGIN_X } from '../constants/index.js';
+import { TYPES, PX_PER_M, ORIGIN_X, PX_PER_MM_V, PX_PER_M_V } from '../constants/index.js';
 import { getItemVisualHeight } from './index.js';
 
 /**
@@ -19,7 +19,7 @@ export const getOpticPhysicalLengthM = (item) => {
     if (item.length !== undefined && !isNaN(item.length)) {
       return parseFloat(parseFloat(item.length).toFixed(3));
     }
-    return 1.5;
+    return 1.2;
   }
   if (item.physicalLength !== undefined && !isNaN(item.physicalLength)) {
     return parseFloat(parseFloat(item.physicalLength).toFixed(3));
@@ -67,12 +67,13 @@ export const getItemBoundsM = (item) => {
 
   if (isDCM) {
     const parsedD = parseFloat(item.exitOffset);
-    const d_m = !isNaN(parsedD) ? parsedD : 0.5;
+    const D_mm = !isNaN(parsedD) ? (parsedD > 0 && parsedD <= 1.0 ? parsedD * 100 : parsedD) : 25;
+    const D_px = D_mm * PX_PER_MM_V;
     const parsedTh = parseFloat(item.braggAngle);
-    const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
+    const th_deg = !isNaN(parsedTh) ? parsedTh : 45;
     const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
-    const L_m = Math.abs(tan2th) > 0.001 ? Math.abs(d_m / tan2th) : 2.0;
-    const dcmCenter_m = parseFloat((dist + L_m / 2).toFixed(3));
+    const L_px = Math.abs(th_deg - 45) < 0.001 ? 0 : (Math.abs(tan2th) > 0.001 ? Math.abs(D_px / tan2th) : 0);
+    const L_m = L_px / PX_PER_M;
 
     let start, end;
     if (item.start !== undefined && item.end !== undefined) {
@@ -80,18 +81,18 @@ export const getItemBoundsM = (item) => {
       end = parseFloat(item.end);
     } else if (item.chamberLength !== undefined) {
       const chLen = parseFloat(item.chamberLength);
-      start = parseFloat((dcmCenter_m - chLen / 2).toFixed(3));
-      end = parseFloat((dcmCenter_m + chLen / 2).toFixed(3));
+      start = parseFloat((dist - 0.5).toFixed(3));
+      end = parseFloat((dist - 0.5 + chLen).toFixed(3));
     } else {
-      const defaultBoxLen = 1.5;
-      start = parseFloat((dcmCenter_m - defaultBoxLen / 2).toFixed(3));
-      end = parseFloat((dcmCenter_m + defaultBoxLen / 2).toFixed(3));
+      const defaultBoxLen = 1.2;
+      start = parseFloat((dist - 0.5).toFixed(3));
+      end = parseFloat((dist + 0.7).toFixed(3));
     }
     const boxLen = parseFloat(Math.abs(end - start).toFixed(3));
-    const finalBoxLen = boxLen > 0 ? boxLen : 1.5;
+    const finalBoxLen = boxLen > 0 ? boxLen : 1.2;
     return {
       dist: parseFloat(dist.toFixed(3)),
-      center: dcmCenter_m,
+      center: parseFloat(((start + end) / 2).toFixed(3)),
       len: finalBoxLen,
       start: parseFloat(Math.min(start, end).toFixed(3)),
       end: parseFloat(Math.max(start, end).toFixed(3)),
@@ -319,10 +320,10 @@ export const getItemMiscParams = (item, activeView) => {
   let miscA = '', miscB = '', miscC = '', miscD = '';
 
   if (['VDCM', 'HDCM'].includes(type)) {
-    miscA = item.exitOffset ?? 0.5;
-    miscB = item.braggAngle ?? 20;
-    miscC = item.crystal1Length ?? 1.0;
-    miscD = item.crystal2Length ?? 1.0;
+    miscA = item.exitOffset ?? 25;
+    miscB = item.braggAngle ?? 45;
+    miscC = item.crystal1Length ?? 0.5;
+    miscD = item.crystal2Length ?? 0.5;
   } else if (type === 'GRATING') {
     miscA = item.orientation || 'Vertical';
     miscB = item.diffractAngle ?? 15;
@@ -503,7 +504,8 @@ export const setItemMiscParam = (item, key, val, activeView) => {
     }
     else if (['VDCM', 'HDCM'].includes(type)) {
       const num = parseFloat(val);
-      updated.exitOffset = isNaN(num) ? (val === '' ? '' : 0.5) : num;
+      const parsedVal = isNaN(num) ? (val === '' ? '' : 25) : (num > 0 && num <= 1.0 ? num * 100 : num);
+      updated.exitOffset = parsedVal;
       const chLen = updated.chamberLength ?? 1.5;
       updated.dimX = chLen * PX_PER_M;
     }
@@ -550,8 +552,8 @@ export const setItemMiscParam = (item, key, val, activeView) => {
     }
     else if (['VDCM', 'HDCM'].includes(type)) {
       const num = parseFloat(val);
-      updated.braggAngle = isNaN(num) ? (val === '' ? '' : 20) : num;
-      const chLen = updated.chamberLength ?? 1.5;
+      updated.braggAngle = isNaN(num) ? (val === '' ? '' : 45) : num;
+      const chLen = updated.chamberLength ?? 2.5;
       updated.dimX = chLen * PX_PER_M;
     }
     else if (type === 'GRATING') updated.diffractAngle = parseFloat(val) || 0;
@@ -709,14 +711,28 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
     let gapToNext = null;
     let nextItemName = null;
     if (!isVirtualAnchor) {
-      const nextPhysical = sorted.slice(idx + 1).find(i => !( ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type) || i.detectorType === 'Virtual Anchor' || i.isInvisible));
-      if (nextPhysical) {
-        const nextBounds = getItemBoundsM(nextPhysical);
-        gapToNext = parseFloat((nextBounds.start - bounds.end).toFixed(3));
-        nextItemName = nextPhysical.customName || TYPES[nextPhysical.type]?.name || nextPhysical.type;
+      if (item.type === 'HUTCH') {
+        // Enclosures check gap to next enclosure
+        const nextEnclosure = sorted.slice(idx + 1).find(i => ['HUTCH', 'CHAMBER'].includes(i.type));
+        if (nextEnclosure) {
+          const nextBounds = getItemBoundsM(nextEnclosure);
+          gapToNext = parseFloat((nextBounds.start - bounds.end).toFixed(3));
+          nextItemName = nextEnclosure.customName || TYPES[nextEnclosure.type]?.name || nextEnclosure.type;
+        } else {
+          gapToNext = parseFloat((canvasLength - bounds.end).toFixed(3));
+          nextItemName = 'End of Beamline';
+        }
       } else {
-        gapToNext = parseFloat((canvasLength - bounds.end).toFixed(3));
-        nextItemName = 'End of Beamline';
+        // Optical items and walls check gap to next optical item or wall (excluding enclosing hutches)
+        const nextPhysical = sorted.slice(idx + 1).find(i => !( ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type) || i.detectorType === 'Virtual Anchor' || i.isInvisible || i.type === 'HUTCH'));
+        if (nextPhysical) {
+          const nextBounds = getItemBoundsM(nextPhysical);
+          gapToNext = parseFloat((nextBounds.start - bounds.end).toFixed(3));
+          nextItemName = nextPhysical.customName || TYPES[nextPhysical.type]?.name || nextPhysical.type;
+        } else {
+          gapToNext = parseFloat((canvasLength - bounds.end).toFixed(3));
+          nextItemName = 'End of Beamline';
+        }
       }
     }
 
@@ -748,11 +764,31 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
         : (item.type === 'CHAMBER'
           ? (item.height !== undefined ? parseFloat(item.height) : (item.dimY ? parseFloat((item.dimY / PX_PER_M).toFixed(3)) : 3.0))
           : ((item.type === 'SOURCE' || isAnchorType || (item.type === 'DETECTOR' && item.stayInPath === false))
-            ? (item.height !== undefined ? parseFloat(item.height) : 0)
-            : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_M).toFixed(3)) : (item.height !== undefined ? parseFloat(item.height) : 0)))),
-      offset: (item.type === 'SOURCE' || isAnchorType || (item.type === 'DETECTOR' && item.stayInPath === false))
-        ? (item.offset !== undefined ? parseFloat(item.offset) : 0)
-        : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_M).toFixed(3)) : (item.offset !== undefined ? parseFloat(item.offset) : 0)),
+            ? (item.height !== undefined && item.height !== null && !isNaN(Number(item.height))
+                ? parseFloat(Number(item.height).toFixed(1))
+                : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_MM_V).toFixed(1)) : 0))
+            : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_MM_V).toFixed(1)) : (item.height !== undefined ? parseFloat(Number(item.height).toFixed(1)) : 0)))),
+      offset: ['WALL', 'HUTCH'].includes(item.type)
+        ? 0
+        : ((item.type === 'SOURCE' || isAnchorType || (item.type === 'DETECTOR' && item.stayInPath === false))
+          ? (item.offset !== undefined && item.offset !== null && !isNaN(Number(item.offset))
+              ? parseFloat(Number(item.offset).toFixed(1))
+              : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_MM_V).toFixed(1)) : 0))
+          : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_MM_V).toFixed(1)) : (item.offset !== undefined ? parseFloat(Number(item.offset).toFixed(1)) : 0))),
+      heightMm: ['WALL', 'HUTCH'].includes(item.type)
+        ? null
+        : ((item.type === 'SOURCE' || isAnchorType || (item.type === 'DETECTOR' && item.stayInPath === false))
+          ? (item.height !== undefined && item.height !== null && !isNaN(Number(item.height))
+              ? parseFloat(Number(item.height).toFixed(1))
+              : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_MM_V).toFixed(1)) : 0))
+          : (item.y !== undefined ? parseFloat(((150 - item.y) / PX_PER_MM_V).toFixed(1)) : (item.height !== undefined ? parseFloat(Number(item.height).toFixed(1)) : 0))),
+      offsetMm: ['WALL', 'HUTCH'].includes(item.type)
+        ? null
+        : ((item.type === 'SOURCE' || isAnchorType || (item.type === 'DETECTOR' && item.stayInPath === false))
+          ? (item.offset !== undefined && item.offset !== null && !isNaN(Number(item.offset))
+              ? parseFloat(Number(item.offset).toFixed(1))
+              : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_MM_V).toFixed(1)) : 0))
+          : (item.z !== undefined ? parseFloat((((item.z) - 150) / PX_PER_MM_V).toFixed(1)) : (item.offset !== undefined ? parseFloat(Number(item.offset).toFixed(1)) : 0))),
       misc,
       miscLabels,
       enclosureName,
@@ -831,8 +867,8 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     'Minor Color',
     'Clearance to Next (m)',
     'Next Component',
-    'Elevation Y (m)',
-    'Lateral Offset Z (m)',
+    'Elevation Y (mm)',
+    'Lateral Offset Z (mm)',
     'Wall/Enclosure Width (m)',
     'Wall/Enclosure Height (m)',
     'Ray Color',
@@ -907,8 +943,8 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
       `"${String(item.secondaryColor || '').replace(/"/g, '""')}"`,
       r.gapToNext !== null ? r.gapToNext.toFixed(3) : 'N/A',
       `"${(r.nextItemName || '').replace(/"/g, '""')}"`,
-      r.height.toFixed(3),
-      r.offset.toFixed(3),
+      ['WALL', 'HUTCH'].includes(r.type) ? '-' : (r.heightMm !== null && r.heightMm !== undefined ? Number(r.heightMm).toFixed(1) : (r.height !== null && r.height !== undefined && !isNaN(Number(r.height)) ? Number(r.height).toFixed(1) : '-')),
+      ['WALL', 'HUTCH'].includes(r.type) ? '-' : (r.offsetMm !== null && r.offsetMm !== undefined ? Number(r.offsetMm).toFixed(1) : (r.offset !== null && r.offset !== undefined && !isNaN(Number(r.offset)) ? Number(r.offset).toFixed(1) : '-')),
       wallW,
       wallH,
       `"${rayColor.replace(/"/g, '""')}"`,
@@ -999,8 +1035,8 @@ export const parseCsvToItems = (csvText) => {
   const lockCenterIdx = getCol('lockcenter', 'islockcenter');
   const primaryColorIdx = getCol('majorcolor', 'primarycolor', 'color1', 'color');
   const secondaryColorIdx = getCol('minorcolor', 'secondarycolor', 'color2');
-  const elevYIdx = getCol('elevationym', 'elevationy', 'height', 'y');
-  const latZIdx = getCol('lateraloffsetzm', 'lateraloffsetz', 'offset', 'z');
+  const elevYIdx = getCol('elevationymm', 'elevationym', 'elevationy', 'height', 'y');
+  const latZIdx = getCol('lateraloffsetzmm', 'lateraloffsetzm', 'lateraloffsetz', 'offset', 'z');
   const wallWidthIdx = getCol('wallenclosurewidthm', 'wallenclosurewidth', 'wallwidthm', 'wallwidth', 'width');
   const wallHeightIdx = getCol('wallenclosureheightm', 'wallenclosureheight', 'wallheightm', 'wallheight');
   const rayColorIdx = getCol('raycolor', 'beamcolor');
@@ -1067,6 +1103,9 @@ export const parseCsvToItems = (csvText) => {
       } else if (isSource) {
         endVal = dist;
         startVal = parseFloat((dist - physLen).toFixed(3));
+      } else if (['VDCM', 'HDCM'].includes(compType)) {
+        startVal = parseFloat((dist - 0.5).toFixed(3));
+        endVal = parseFloat((dist + 0.7).toFixed(3));
       } else {
         const boxLen = (boxLenIdx !== -1 && !isNaN(parseFloat(cols[boxLenIdx])))
           ? parseFloat(cols[boxLenIdx])
@@ -1087,8 +1126,31 @@ export const parseCsvToItems = (csvText) => {
     const primaryColor = (primaryColorIdx !== -1 && cols[primaryColorIdx]) ? cols[primaryColorIdx].trim() : undefined;
     const secondaryColor = (secondaryColorIdx !== -1 && cols[secondaryColorIdx]) ? cols[secondaryColorIdx].trim() : undefined;
 
-    const height = elevYIdx !== -1 && !isNaN(parseFloat(cols[elevYIdx])) ? parseFloat(cols[elevYIdx]) : 0;
-    const offset = latZIdx !== -1 && !isNaN(parseFloat(cols[latZIdx])) ? parseFloat(cols[latZIdx]) : 0;
+    const isElevMmHeader = elevYIdx !== -1 && Boolean(headers[elevYIdx]?.includes('mm'));
+    const isLatMmHeader = latZIdx !== -1 && Boolean(headers[latZIdx]?.includes('mm'));
+
+    const rawHeightStr = elevYIdx !== -1 ? cols[elevYIdx]?.trim() : '';
+    const rawOffsetStr = latZIdx !== -1 ? cols[latZIdx]?.trim() : '';
+
+    const isElevDash = rawHeightStr === '-' || rawHeightStr === '';
+    const isOffsetDash = rawOffsetStr === '-' || rawOffsetStr === '';
+
+    const parsedHeight = !isElevDash && !isNaN(parseFloat(rawHeightStr)) ? parseFloat(rawHeightStr) : 0;
+    const parsedOffset = !isOffsetDash && !isNaN(parseFloat(rawOffsetStr)) ? parseFloat(rawOffsetStr) : 0;
+
+    let h_mm = 0;
+    if (!isElevDash) {
+      if (['WALL', 'HUTCH', 'CHAMBER'].includes(compType)) {
+        h_mm = isElevMmHeader ? parsedHeight : parsedHeight * 1000;
+      } else {
+        h_mm = isElevMmHeader ? parsedHeight : parsedHeight * 1000;
+      }
+    }
+
+    let o_mm = 0;
+    if (!isOffsetDash) {
+      o_mm = isLatMmHeader ? parsedOffset : parsedOffset * 1000;
+    }
 
     let wallW = (wallWidthIdx !== -1 && !isNaN(parseFloat(cols[wallWidthIdx])))
       ? parseFloat(cols[wallWidthIdx])
@@ -1100,11 +1162,11 @@ export const parseCsvToItems = (csvText) => {
       ? parseFloat(cols[wallHeightIdx])
       : (['WALL', 'HUTCH'].includes(compType) && miscBIdx !== -1 && !isNaN(parseFloat(cols[miscBIdx]))
           ? parseFloat(cols[miscBIdx])
-          : (height || (conf.height ? conf.height / PX_PER_M : 7.0)));
+          : ((!isElevDash && parsedHeight > 0) ? (isElevMmHeader ? parsedHeight / 1000 : parsedHeight) : (conf.height ? conf.height / PX_PER_M : 7.0)));
 
     const chamberH = wallHeightIdx !== -1 && !isNaN(parseFloat(cols[wallHeightIdx]))
       ? parseFloat(cols[wallHeightIdx])
-      : (height > 0 ? height : (compType === 'CHAMBER' && miscAIdx !== -1 && !isNaN(parseFloat(cols[miscAIdx])) ? parseFloat(cols[miscAIdx]) : (conf.height / PX_PER_M || 3.0)));
+      : ((!isElevDash && parsedHeight > 0) ? (isElevMmHeader ? parsedHeight / 1000 : parsedHeight) : (compType === 'CHAMBER' && miscAIdx !== -1 && !isNaN(parseFloat(cols[miscAIdx])) ? parseFloat(cols[miscAIdx]) : (conf.height / PX_PER_M || 3.0)));
 
     // Sizing and positioning calculations
     let dimX, dimY, dimZ, x, y, z, actualDistance;
@@ -1123,15 +1185,15 @@ export const parseCsvToItems = (csvText) => {
       actualDistance = parseFloat(((startVal + endVal) / 2).toFixed(3));
       x = ORIGIN_X + actualDistance * PX_PER_M;
       y = 150 - chamberH * PX_PER_M;
-      z = 150 + offset * PX_PER_M;
+      z = 150 + o_mm * PX_PER_MM_V;
     } else if (isSource) {
       dimX = physLen * PX_PER_M;
       dimY = conf.height;
       dimZ = conf.width;
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
-      y = 150 - height * PX_PER_M;
-      z = 150 + offset * PX_PER_M;
+      y = 150 - h_mm * PX_PER_MM_V;
+      z = 150 + o_mm * PX_PER_MM_V;
     } else if (['VDCM', 'HDCM'].includes(compType)) {
       const boxLen = parseFloat(Math.abs(endVal - startVal).toFixed(3));
       dimX = boxLen * PX_PER_M;
@@ -1139,24 +1201,24 @@ export const parseCsvToItems = (csvText) => {
       dimZ = conf.height;
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
-      y = 150;
-      z = 150;
+      y = 150 - h_mm * PX_PER_MM_V;
+      z = 150 + o_mm * PX_PER_MM_V;
     } else if (['VFM', 'HFM'].includes(compType)) {
       dimX = physLen * PX_PER_M;
       dimY = undefined;
       dimZ = undefined;
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
-      y = 150 - height * PX_PER_M;
-      z = 150 + offset * PX_PER_M;
+      y = 150 - h_mm * PX_PER_MM_V;
+      z = 150 + o_mm * PX_PER_MM_V;
     } else {
       dimX = physLen * PX_PER_M;
       dimY = conf.height;
       dimZ = conf.height;
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
-      y = 150 - height * PX_PER_M;
-      z = 150 + offset * PX_PER_M;
+      y = 150 - h_mm * PX_PER_MM_V;
+      z = 150 + o_mm * PX_PER_MM_V;
     }
 
     let item = {
@@ -1176,8 +1238,8 @@ export const parseCsvToItems = (csvText) => {
       isLocked,
       lockLength,
       lockCenter,
-      height: compType === 'CHAMBER' ? chamberH : (['WALL', 'HUTCH'].includes(compType) ? wallH : height),
-      offset,
+      height: compType === 'CHAMBER' ? chamberH : (['WALL', 'HUTCH'].includes(compType) ? wallH : (isElevDash ? 0 : h_mm)),
+      offset: isOffsetDash ? 0 : o_mm,
       wallWidth: wallW,
       wallHeight: wallH,
       dimX,
@@ -1276,7 +1338,7 @@ export const parseCsvToItems = (csvText) => {
     }
 
     if (['VDCM', 'HDCM'].includes(compType)) {
-      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : 1.5;
+      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : 1.2;
       item.dimX = chLen * PX_PER_M;
       item.length = chLen;
       item.physicalLength = chLen;

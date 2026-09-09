@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TYPES, ORIGIN_X, PX_PER_M } from '../constants/index.js';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, PX_PER_M_V } from '../constants/index.js';
 
 export const usePhysicsEngine = (items) => {
   const { computedItems, tracePointsSide, tracePointsTop } = useMemo(() => {
@@ -37,7 +37,11 @@ export const usePhysicsEngine = (items) => {
 
       let currSlope = 0;
       let prevDist = source.distance || 0;
-      let currVal = source[plane];
+      const srcH_mm = source.height !== undefined ? Number(source.height) : 0;
+      const srcO_mm = source.offset !== undefined ? Number(source.offset) : 0;
+      let currVal = plane === 'y'
+        ? (source.height !== undefined ? 150 - srcH_mm * PX_PER_MM_V : (source.y ?? 150))
+        : (source.offset !== undefined ? 150 + srcO_mm * PX_PER_MM_V : (source.z ?? 150));
       let beamActive = true; 
 
       for (let i = 0; i < startIndex; i++) {
@@ -53,14 +57,15 @@ export const usePhysicsEngine = (items) => {
 
         if (isShifter(item.type)) {
           const parsedD = parseFloat(item.exitOffset);
-          const D_m = !isNaN(parsedD) ? parsedD : 0.5;
-          const D = D_m * PX_PER_M;
+          // User: 25 mm offset shifts drawn ray by 0.25 unit (5 px)
+          const D_mm = !isNaN(parsedD) ? (parsedD > 0 && parsedD <= 1.0 ? parsedD * 100 : parsedD) : 25;
+          const D = D_mm * PX_PER_MM_V; // 25 mm * 0.2 = 5 px = 0.25 unit grid!
           const parsedTheta = parseFloat(item.braggAngle);
-          const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 20;
+          const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 45;
           const theta = theta_deg * Math.PI / 180;
           
           const tan2theta = Math.tan(2 * theta);
-          const L = Math.abs(tan2theta) > 0.001 ? Math.abs(D / tan2theta) : 40;
+          const L = Math.abs(theta_deg - 45) < 0.001 ? 0 : (Math.abs(tan2theta) > 0.001 ? Math.abs(D / tan2theta) : 0);
 
           const x_C1 = item.x;
           const val_C1 = currVal + currSlope * (item.distance - prevDist);
@@ -72,7 +77,7 @@ export const usePhysicsEngine = (items) => {
 
           currVal = val_C2;
           prevDist = (x_C2 - ORIGIN_X) / PX_PER_M;
-          cItemsMap[item.id] = { ...item, [plane]: (val_C1 + val_C2) / 2 };
+          cItemsMap[item.id] = { ...item, [plane]: val_C1 };
 
         } else if (isBender(item.type)) {
           const hitVal = currVal + currSlope * (item.distance - prevDist);
@@ -90,21 +95,59 @@ export const usePhysicsEngine = (items) => {
             }
           }
 
+          const inSlope = currSlope;
+          let newSlope = currSlope;
+          let grazingAngleMrad = 0;
+          let deflectAngleMrad = 0;
+
           if (nextAnchor) {
             const distDiff = Math.max(0.001, nextAnchor.distance - item.distance);
             let anchorTargetVal = nextAnchor[plane];
             const isAnchorItem = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(nextAnchor.type);
             if (isAnchorItem || (nextAnchor.type === 'DETECTOR' && (nextAnchor.stayInPath === false || nextAnchor.detectorType === 'Virtual Anchor'))) {
+              const h_mm = nextAnchor.height !== undefined ? Number(nextAnchor.height) : 0;
+              const o_mm = nextAnchor.offset !== undefined ? Number(nextAnchor.offset) : 0;
               anchorTargetVal = plane === 'y'
-                ? (nextAnchor.height !== undefined ? 150 - nextAnchor.height * PX_PER_M : (nextAnchor.y ?? 150))
-                : (nextAnchor.offset !== undefined ? 150 + nextAnchor.offset * PX_PER_M : (nextAnchor.z ?? 150));
+                ? (nextAnchor.height !== undefined ? 150 - h_mm * PX_PER_MM_V : (nextAnchor.y ?? 150))
+                : (nextAnchor.offset !== undefined ? 150 + o_mm * PX_PER_MM_V : (nextAnchor.z ?? 150));
             } else if (anchorTargetVal === undefined) {
+              const h_mm = nextAnchor.height !== undefined ? Number(nextAnchor.height) : 0;
+              const o_mm = nextAnchor.offset !== undefined ? Number(nextAnchor.offset) : 0;
               anchorTargetVal = plane === 'y'
-                ? 150 - (nextAnchor.height ?? 0) * PX_PER_M
-                : 150 + (nextAnchor.offset ?? 0) * PX_PER_M;
+                ? 150 - h_mm * PX_PER_MM_V
+                : 150 + o_mm * PX_PER_MM_V;
             }
-            currSlope = (anchorTargetVal - hitVal) / distDiff;
+            newSlope = (anchorTargetVal - hitVal) / distDiff;
+
+            // Physical angle calculation in mrad:
+            // For 'y' (Side): Elevation Y (m) = (150 - y) / PX_PER_M_V, so slope_real = -slope / PX_PER_M_V
+            // For 'z' (Top):  Offset Z (m) = (z - 150) / PX_PER_M_V, so slope_real = +slope / PX_PER_M_V
+            const sign = plane === 'y' ? -1 : 1;
+            const m_in = (sign * inSlope) / PX_PER_M_V;
+            const m_out = (sign * newSlope) / PX_PER_M_V;
+            const theta_in = Math.atan(m_in);
+            const theta_out = Math.atan(m_out);
+            const deltaTheta = Math.abs(theta_out - theta_in);
+            deflectAngleMrad = deltaTheta * 1000;
+            grazingAngleMrad = deflectAngleMrad / 2;
+          } else if (item.grazingAngle !== undefined || item.grazingAngleMrad !== undefined) {
+            const inputVal = item.grazingAngleMrad !== undefined ? parseFloat(item.grazingAngleMrad) : parseFloat(item.grazingAngle);
+            if (!isNaN(inputVal) && inputVal > 0) {
+              grazingAngleMrad = inputVal;
+              deflectAngleMrad = inputVal * 2;
+              const deltaTheta = deflectAngleMrad / 1000;
+              const sign = plane === 'y' ? -1 : 1;
+              const m_in = (sign * inSlope) / PX_PER_M_V;
+              const theta_in = Math.atan(m_in);
+              const theta_out = theta_in + (sign * deltaTheta);
+              const m_out = Math.tan(theta_out);
+              newSlope = sign * m_out * PX_PER_M_V;
+            }
           }
+
+          currSlope = newSlope;
+          cItemsMap[item.id].grazingAngleMrad = grazingAngleMrad;
+          cItemsMap[item.id].deflectAngleMrad = deflectAngleMrad;
           currVal = hitVal;
           prevDist = item.distance;
 
@@ -132,22 +175,28 @@ export const usePhysicsEngine = (items) => {
           let planeVal = hitVal;
           if (isFixedAnchor) {
             if (item.type === 'ANCHOR_SIDE') {
+              const h_mm = item.height !== undefined ? Number(item.height) : 0;
               planeVal = plane === 'y' 
-                ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
+                ? (item.height !== undefined ? 150 - h_mm * PX_PER_MM_V : (item.y ?? 150))
                 : hitVal;
             } else if (item.type === 'ANCHOR_TOP') {
+              const o_mm = item.offset !== undefined ? Number(item.offset) : 0;
               planeVal = plane === 'z'
-                ? (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150))
+                ? (item.offset !== undefined ? 150 + o_mm * PX_PER_MM_V : (item.z ?? 150))
                 : hitVal;
             } else {
+              const h_mm = item.height !== undefined ? Number(item.height) : 0;
+              const o_mm = item.offset !== undefined ? Number(item.offset) : 0;
               planeVal = plane === 'y'
-                ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
-                : (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150));
+                ? (item.height !== undefined ? 150 - h_mm * PX_PER_MM_V : (item.y ?? 150))
+                : (item.offset !== undefined ? 150 + o_mm * PX_PER_MM_V : (item.z ?? 150));
             }
           } else if (isFixedDetector) {
+            const h_mm = item.height !== undefined ? Number(item.height) : 0;
+            const o_mm = item.offset !== undefined ? Number(item.offset) : 0;
             planeVal = plane === 'y'
-              ? (item.height !== undefined ? 150 - item.height * PX_PER_M : (item.y ?? 150))
-              : (item.offset !== undefined ? 150 + item.offset * PX_PER_M : (item.z ?? 150));
+              ? (item.height !== undefined ? 150 - h_mm * PX_PER_MM_V : (item.y ?? 150))
+              : (item.offset !== undefined ? 150 + o_mm * PX_PER_MM_V : (item.z ?? 150));
           }
 
           cItemsMap[item.id] = { ...item, [plane]: planeVal };
@@ -175,7 +224,9 @@ export const usePhysicsEngine = (items) => {
       y: sideData.cItemsMap[item.id]?.y !== undefined ? sideData.cItemsMap[item.id].y : item.y,
       z: topData.cItemsMap[item.id]?.z !== undefined ? topData.cItemsMap[item.id].z : item.z,
       slopeSide: sideData.cItemsMap[item.id]?.slope ?? 0,
-      slopeTop: topData.cItemsMap[item.id]?.slope ?? 0
+      slopeTop: topData.cItemsMap[item.id]?.slope ?? 0,
+      grazingAngleMrad: item.type === 'VFM' ? sideData.cItemsMap[item.id]?.grazingAngleMrad : (item.type === 'HFM' ? topData.cItemsMap[item.id]?.grazingAngleMrad : undefined),
+      deflectAngleMrad: item.type === 'VFM' ? sideData.cItemsMap[item.id]?.deflectAngleMrad : (item.type === 'HFM' ? topData.cItemsMap[item.id]?.deflectAngleMrad : undefined)
     }));
 
     return {

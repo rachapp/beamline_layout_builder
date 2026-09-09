@@ -12,8 +12,8 @@ export const TYPES = {
   XBPM: { id: 'XBPM', name: 'XBPM', width: 8.5, height: 8.5, defaultLength: 0.425 },
   CHAMBER: { id: 'CHAMBER', name: 'Floating Chamber', width: 80, height: 60, defaultLength: 4 },
   HUTCH: { id: 'HUTCH', name: 'Hutch', width: 340, height: 140, defaultLength: 17 },
-  VDCM: { id: 'VDCM', name: 'VDCM', width: 30, height: 24, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
-  HDCM: { id: 'HDCM', name: 'HDCM', width: 30, height: 24, defaultLength: 1.5, defaultCrystal1Length: 1.0, defaultCrystal2Length: 1.0 },
+  VDCM: { id: 'VDCM', name: 'VDCM', width: 24, height: 40, defaultLength: 1.2, defaultCrystal1Length: 0.5, defaultCrystal2Length: 0.5 },
+  HDCM: { id: 'HDCM', name: 'HDCM', width: 24, height: 40, defaultLength: 1.2, defaultCrystal1Length: 0.5, defaultCrystal2Length: 0.5 },
   VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
   HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 12, height: 12, defaultLength: 0.6 },
@@ -25,7 +25,9 @@ export const TYPES = {
 };
 
 export const ORIGIN_X = 160; 
-export const PX_PER_M = 20;
+export const PX_PER_M = 20;              // Horizontal scale (X): 20 px/m (1 grid unit = 1.0 m)
+export const PX_PER_MM_V = 0.4;          // Vertical scale (Y/Z): 0.4 px/mm (1 grid unit = 20 px = 50 mm)
+export const PX_PER_M_V = 400;           // Vertical scale (Y/Z): 400 px/m
 export const SNAP_STEP_M = 0.1;          // snap resolution in metres
 export const SNAP_STEP_PX = SNAP_STEP_M * PX_PER_M;  // = 2px
 export const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899', '#64748b', '#0f172a'];

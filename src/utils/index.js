@@ -1,4 +1,4 @@
-import { TYPES, ORIGIN_X, PX_PER_M } from '../constants/index.js';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V } from '../constants/index.js';
 
 export const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
@@ -38,8 +38,8 @@ export const mapTemplateToItems = (templateData) => {
     const o = parseFloat(item.offset) ?? 0;
     
     const isChamber = item.type === 'CHAMBER';
-    const y = isChamber ? 150 - (h * PX_PER_M) : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_M));
-    const z = isChamber ? 150 + (o * PX_PER_M) : ((isRange) ? 150 : 150 + (o * PX_PER_M));
+    const y = isChamber ? 150 - (h * PX_PER_M) : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_MM_V));
+    const z = isChamber ? 150 + (o * PX_PER_MM_V) : ((isRange) ? 150 : 150 + (o * PX_PER_MM_V));
     
     let dimY = isRange ? (h * PX_PER_M) : undefined;
     let dimZ = isRange ? (h * PX_PER_M) : undefined;
@@ -66,7 +66,7 @@ export const mapTemplateToItems = (templateData) => {
       end = isNaN(end) ? dist : end;
       start = isNaN(start) ? parseFloat((end - physicalLength).toFixed(3)) : start;
     } else if (['VDCM', 'HDCM'].includes(item.type)) {
-      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : (item.housingLength !== undefined ? parseFloat(item.housingLength) : 1.5);
+      const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : (item.housingLength !== undefined ? parseFloat(item.housingLength) : 1.2);
       dimX = chLen * PX_PER_M;
       if (item.housingHeight !== undefined) {
         dimY = parseFloat(item.housingHeight) * PX_PER_M;

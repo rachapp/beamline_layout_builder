@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
-import { TYPES, ORIGIN_X, PX_PER_M, GRID_SIZE } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE } from '../constants';
 import { getOpticPhysicalLengthM, getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
 import { getItemVisualHeight } from '../utils';
 
@@ -281,6 +281,7 @@ export const Viewport = ({
 
             {showRuler && (
               <g className="ruler-layer">
+                {/* Horizontal Meter Ruler (at top) */}
                 <line x1="0" y1="65" x2={canvasWidth} y2="65" stroke={isDarkMode ? '#334155' : '#cbd5e1'} strokeWidth="1.5" />
                 {(() => {
                   const maxMeters = Math.ceil(canvasWidth / PX_PER_M);
@@ -313,6 +314,97 @@ export const Viewport = ({
                     );
                   }
                   return ticks;
+                })()}
+
+                {/* Vertical Millimeter Ruler (Left margin: 1 unit grid = 20px = 100mm) */}
+                {(() => {
+                  const vRulerX = 65;
+                  const vTicks = [];
+                  const tickColor = isDarkMode ? '#334155' : '#cbd5e1';
+                  const textColor = isDarkMode ? '#94a3b8' : '#475569';
+                  const fontSize = canvasSettings?.rulerTextSize ?? 10;
+
+                  // Vertical ruler axis header
+                  vTicks.push(
+                    <text
+                      key="v-ruler-title"
+                      x={vRulerX - 6}
+                      y="58"
+                      fill={isDarkMode ? '#64748b' : '#94a3b8'}
+                      fontSize="9"
+                      fontFamily="sans-serif"
+                      fontWeight="bold"
+                      textAnchor="end"
+                    >
+                      {viewType === 'SIDE' ? 'ELEV (Y)' : 'OFFSET (Z)'}
+                    </text>
+                  );
+
+                  // Vertical ruler baseline
+                  vTicks.push(
+                    <line 
+                      key="v-ruler-line"
+                      x1={vRulerX} y1="65" 
+                      x2={vRulerX} y2="235" 
+                      stroke={tickColor} 
+                      strokeWidth="1.5" 
+                    />
+                  );
+
+                  // Zero beamline indicator line towards ORIGIN_X
+                  vTicks.push(
+                    <line
+                      key="v-ruler-zero-guide"
+                      x1={vRulerX} y1="150"
+                      x2={ORIGIN_X - 10} y2="150"
+                      stroke={isDarkMode ? '#1e3a8a' : '#bfdbfe'}
+                      strokeWidth="1"
+                      strokeDasharray="2,3"
+                      opacity="0.7"
+                    />
+                  );
+
+                  // Ticks for mm: +200 mm, +150 mm, +100 mm, +50 mm, 0 mm, -50 mm, -100 mm, -150 mm, -200 mm
+                  // Minor ticks every 25 mm, major ticks and labels every 50 mm (1 unit grid = 20 px)
+                  const mmValues = [225, 200, 175, 150, 125, 100, 75, 50, 25, 0, -25, -50, -75, -100, -125, -150, -175, -200, -225];
+                  mmValues.forEach((val) => {
+                    // In Side View: +Y (higher elevation) is smaller y. 0 mm is at 150 px.
+                    // In Top View: +Z (outboard) is larger z. 0 mm is at 150 px.
+                    const yPos = viewType === 'SIDE' ? 150 - val * PX_PER_MM_V : 150 + val * PX_PER_MM_V;
+                    const isMajor = val % 50 === 0;
+
+                    vTicks.push(
+                      <line
+                        key={`v-tick-${val}`}
+                        x1={vRulerX}
+                        y1={yPos}
+                        x2={isMajor ? vRulerX + 6 : vRulerX + 3}
+                        y2={yPos}
+                        stroke={val === 0 ? '#3b82f6' : tickColor}
+                        strokeWidth={isMajor ? '1.5' : '1'}
+                      />
+                    );
+
+                    if (isMajor) {
+                      const labelStr = val > 0 ? `+${val} mm` : `${val} mm`;
+                      vTicks.push(
+                        <text
+                          key={`v-text-${val}`}
+                          x={vRulerX - 6}
+                          y={yPos + 3.5}
+                          fill={val === 0 ? '#3b82f6' : textColor}
+                          fontSize={fontSize}
+                          fontFamily="sans-serif"
+                          fontWeight={val === 0 ? 'bold' : 'normal'}
+                          textAnchor="end"
+                        >
+                          {labelStr}
+                        </text>
+                      );
+                    }
+                  });
+
+                  return vTicks;
                 })()}
               </g>
             )}
@@ -578,6 +670,12 @@ export const Viewport = ({
               let chamberBoxTop = 0;
               if (isSimpleMirrorActive) {
                 chamberBoxTop = itemH / 2;
+              } else if (isDCM) {
+                const parsedOffset = parseFloat(item.exitOffset);
+                const offset_mm = !isNaN(parsedOffset) ? (parsedOffset > 0 && parsedOffset <= 1.0 ? parsedOffset * 100 : parsedOffset) : 25;
+                const isDcmActivePlane = (item.type === 'VDCM' && viewType === 'SIDE') || (item.type === 'HDCM' && viewType === 'TOP');
+                const D_px = isDcmActivePlane ? (offset_mm * PX_PER_MM_V) : 0;
+                chamberBoxTop = -D_px / 2;
               }
 
               let rotation = 0;
@@ -600,17 +698,20 @@ export const Viewport = ({
               }
 
               let dcmAnchorX = 0;
+              let dcmAnchorY = 0;
               if (isDCM) {
-                const parsedD = parseFloat(item.exitOffset);
-                const d_m = !isNaN(parsedD) ? parsedD : 0.5;
-                const parsedTh = parseFloat(item.braggAngle);
-                const th_deg = !isNaN(parsedTh) ? parsedTh : 20;
-                const tan2th = Math.tan(2 * th_deg * Math.PI / 180);
-                const L = Math.abs(tan2th) > 0.001 ? Math.abs((d_m * PX_PER_M) / tan2th) : 40;
-                dcmAnchorX = (itemW - L) / 2;
+                const parsedOffset = parseFloat(item.exitOffset);
+                const offset_mm = !isNaN(parsedOffset) ? (parsedOffset > 0 && parsedOffset <= 1.0 ? parsedOffset * 100 : parsedOffset) : 25;
+                const isDcmActivePlane = (item.type === 'VDCM' && viewType === 'SIDE') || (item.type === 'HDCM' && viewType === 'TOP');
+                const D_px = isDcmActivePlane ? (offset_mm * PX_PER_MM_V) : 0;
+
+                dcmAnchorX = (bounds.start !== undefined && bounds.dist !== undefined)
+                  ? (bounds.dist - bounds.start) * PX_PER_M
+                  : 0.5 * PX_PER_M;
+                dcmAnchorY = 20 + D_px / 2;
               }
-              let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? `${dcmAnchorX}px 50%` : '50% 50%');
-              let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? `translate(-${dcmAnchorX}px, -50%)` : 'translate(-50%, -50%)');
+              let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCM ? `${dcmAnchorX}px ${dcmAnchorY}px` : '50% 50%');
+              let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCM ? `translate(-${dcmAnchorX}px, -${dcmAnchorY}px)` : 'translate(-50%, -50%)');
               if (item.type === 'SOURCE') {
                   transformOrigin = '100% 50%';
                   transformOffset = 'translate(-100%, -50%)';
@@ -751,7 +852,7 @@ export const Viewport = ({
                     }}
                   >
                     <div className="w-full h-full pointer-events-none relative z-10">
-                      <OpticalComponent item={item} itemW={itemW} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
+                      <OpticalComponent item={item} itemW={itemW} dcmAnchorX={dcmAnchorX} dcmAnchorY={dcmAnchorY} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
                     </div>
                     
                     {isSelected && ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && (
@@ -890,6 +991,7 @@ export const Viewport = ({
             })}
 
             {placingType && ghostPos?.view === viewType && !(placingType === 'ANCHOR_SIDE' && viewType === 'TOP') && !(placingType === 'ANCHOR_TOP' && viewType === 'SIDE') && (() => {
+               const isDCMPlacing = placingType === 'VDCM' || placingType === 'HDCM';
                const conf = TYPES[placingType] || { width: 8, height: 8 };
                const mockItem = { 
                  type: placingType, 
@@ -899,13 +1001,19 @@ export const Viewport = ({
                  dimY: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'HFM' ? 20 : conf.height)),
                  dimZ: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'VFM' ? 20 : conf.height)),
                  passLight: true,
-                 detectorType: 'Silicon Detector'
+                 detectorType: 'Silicon Detector',
+                 ...(isDCMPlacing ? { exitOffset: 25, braggAngle: 45, crystal1Length: 0.5, crystal2Length: 0.5 } : {})
                };
                const isGratingActive = placingType === 'GRATING' && ((viewType === 'SIDE' && mockItem.orientation === 'Vertical') || (viewType === 'TOP' && mockItem.orientation === 'Horizontal'));
                const isSimpleMirrorActive = (placingType === 'VFM' && viewType === 'SIDE') || (placingType === 'HFM' && viewType === 'TOP') || isGratingActive;
+                const isDcmActiveView = (placingType === 'VDCM' && viewType === 'SIDE') || (placingType === 'HDCM' && viewType === 'TOP');
+                const dcmOffset_mm = 25;
+                const dcmD_px = dcmOffset_mm * PX_PER_MM_V;
+                const dcmAnchorX = isDCMPlacing ? 0.5 * PX_PER_M : 0;
+                const dcmAnchorY = isDCMPlacing ? (isDcmActiveView ? 20 + dcmD_px / 2 : 20) : 0;
 
-               let transformOrigin = isSimpleMirrorActive ? '50% 0%' : '50% 50%';
-               let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : 'translate(-50%, -50%)';
+               let transformOrigin = isSimpleMirrorActive ? '50% 0%' : (isDCMPlacing ? `${dcmAnchorX}px ${dcmAnchorY}px` : '50% 50%');
+               let transformOffset = isSimpleMirrorActive ? 'translate(-50%, 0%)' : (isDCMPlacing ? `translate(-${dcmAnchorX}px, -${dcmAnchorY}px)` : 'translate(-50%, -50%)');
                if (placingType === 'SOURCE') {
                    transformOrigin = '100% 50%';
                    transformOffset = 'translate(-100%, -50%)';
@@ -944,7 +1052,7 @@ export const Viewport = ({
                      transform: `${transformOffset} rotate(${rotation}rad)`
                    }}
                  >
-                    <OpticalComponent item={mockItem} itemW={itemW} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
+                    <OpticalComponent item={mockItem} itemW={itemW} dcmAnchorX={dcmAnchorX} dcmAnchorY={dcmAnchorY} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
                  </div>
                );
             })()}
