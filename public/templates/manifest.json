@@ -1,5 +1,10 @@
 [
   {
+    "name": "SPS-II_GIXRD-TRXRF_1",
+    "fileName": "SPS-II_GIXRD-TRXRF_1.csv",
+    "url": "./templates/SPS-II_GIXRD-TRXRF_1.csv"
+  },
+  {
     "name": "SPS-II_GIXRD_TRXRF",
     "fileName": "SPS-II_GIXRD_TRXRF.csv",
     "url": "./templates/SPS-II_GIXRD_TRXRF.csv"

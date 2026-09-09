@@ -1,0 +1,25 @@
+# Synchrotron Beamline - Construction & Spatial Guide
+# Generated: 9/9/2026, 11:34:20 AM
+# Total Beamline Length: 58 m | Components: 21
+Sequence #,Component Name,Type,Center Position X (m),Optics Physical Length (m),Chamber Footprint Length (m),Upstream Face X_start (m),Downstream Face X_end (m),Asymmetric Chamber,Show Footprint Box,Show Footprint Text,Show Label,Locked,Lock Length,Lock Center,Major Color,Minor Color,Clearance to Next (m),Next Component,Elevation Y (m),Lateral Offset Z (m),Wall/Enclosure Width (m),Wall/Enclosure Height (m),Ray Color,Ray Width,Ray Style,Show Ray Arrow,Animate Ray,Misc A,Misc B,Misc C,Misc D,Label Side X (px),Label Side Y (px),Label Top X (px),Label Top Y (px),Enclosure / Section
+1,"IVU19",SOURCE,0.000,1.653,1.653,-1.653,0.000,NO,YES,NO,YES,NO,NO,NO,"","",20.700,"Wall",1.200,0.000,,,"#ef4444",1.0,"dashed",NO,YES,"Undulator","19","87","dashed",,,,,"Open Beamline"
+2,"Wall",WALL,20.850,0.300,0.300,20.700,21.000,NO,NO,NO,YES,YES,YES,NO,"","",1.750,"FSM",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
+3,"FSM",SCREEN,23.000,0.600,0.500,22.750,23.250,NO,YES,NO,YES,NO,NO,NO,"#21c4a4","",0.250,"DBS",1.200,0.000,,,"",,"",,,"","","","",0.5,11.3,,,"Open Beamline"
+4,"DBS",GRATING,24.000,0.800,1.000,23.500,24.500,NO,YES,NO,YES,YES,NO,NO,"","",1.250,"WBS",1.200,0.000,,,"",,"",,,"Horizontal","0","155","",-0.5,12.0,1.4,16.5,"Open Beamline"
+5,"WBS",SLIT,26.000,0.300,0.500,25.750,26.250,NO,YES,NO,YES,NO,NO,NO,"","",0.500,"FSM",1.200,0.000,,,"",,"",,,"","","","",-5.8,14.1,-1.3,14.1,"Open Beamline"
+6,"FSM",SCREEN,27.000,0.600,0.500,26.750,27.250,NO,YES,NO,YES,NO,NO,NO,"#47cbb6","",0.227,"DCM",1.200,0.000,,,"",,"",,,"","","","",-0.4,14.8,2.0,10.3,"Open Beamline"
+7,"DCM",VDCM,28.000,1.200,1.200,27.477,28.677,NO,YES,NO,YES,YES,NO,NO,"","",0.073,"FSM",1.265,0.000,,,"",,"",,,"0.13","20","0.5","0.5",1.4,15.7,7.7,10.0,"Open Beamline"
+8,"FSM",SCREEN,29.000,0.600,0.500,28.750,29.250,NO,YES,NO,NO,NO,NO,NO,"","",0.150,"VFM",1.330,0.000,,,"",,"",,,"","","","",1.1,17.7,-0.9,9.1,"Open Beamline"
+9,"VFM",VFM,30.000,0.800,1.200,29.400,30.600,NO,YES,NO,YES,YES,NO,NO,"","",1.300,"Wall",1.330,0.000,,,"",,"",,,"0.8","0","","0.3",1.7,16.3,5.1,14.9,"Open Beamline"
+10,"Wall",WALL,31.950,0.100,0.100,31.900,32.000,NO,NO,NO,NO,YES,YES,NO,"","",6.900,"Wall",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
+11,"Wall",WALL,38.950,0.100,0.100,38.900,39.000,NO,NO,NO,NO,YES,YES,NO,"","",0.250,"XBPM",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
+12,"XBPM",XBPM,39.500,0.425,0.500,39.250,39.750,NO,YES,NO,NO,NO,NO,NO,"","",0.000,"FSM",1.311,0.000,,,"",,"",,,"","","","",5.1,39.4,-9.4,4.5,"Open Beamline"
+13,"FSM",SCREEN,40.000,0.600,0.500,39.750,40.250,NO,YES,NO,YES,NO,NO,NO,"","",0.050,"HFM",1.310,0.000,,,"",,"",,,"","","","",1.7,14.3,9.6,6.7,"Open Beamline"
+14,"HFM",HFM,40.900,1.000,1.200,40.300,41.500,NO,YES,NO,YES,YES,NO,NO,"","",1.750,"XBPM",1.308,0.000,,,"",,"",,,"1","0","","0.3",7.7,13.1,6.0,0.3,"Open Beamline"
+15,"XBPM",XBPM,43.500,0.425,0.500,43.250,43.750,NO,YES,NO,YES,NO,NO,NO,"","",0.000,"Slit",1.302,0.068,,,"",,"",,,"","","","",,,,,"Open Beamline"
+16,"Slit",SLIT,44.000,0.300,0.500,43.750,44.250,NO,YES,NO,NO,NO,NO,NO,"","",0.000,"FSM",1.301,0.082,,,"",,"",,,"","","","",,,,,"Open Beamline"
+17,"FSM",SCREEN,44.500,0.600,0.500,44.250,44.750,NO,YES,NO,YES,NO,NO,NO,"","",0.225,"Sample",1.300,0.095,,,"",,"",,,"","","","",8.6,13.4,7.7,13.1,"Open Beamline"
+18,"Side Anchor",ANCHOR_SIDE,44.700,0.000,0.000,44.700,44.700,NO,NO,NO,NO,NO,NO,NO,"","",N/A,"",1.300,0.000,,,"",,"",,,"","","","",,,,,"Open Beamline"
+19,"Top Anchor",ANCHOR_TOP,44.700,0.000,0.000,44.700,44.700,NO,NO,NO,NO,NO,NO,NO,"","",N/A,"",0.000,0.100,,,"",,"",,,"","","","",,,,,"Open Beamline"
+20,"Sample",SAMPLE,45.000,0.600,0.050,44.975,45.025,NO,YES,NO,YES,YES,NO,NO,"","",4.875,"Wall",1.299,0.108,,,"",,"",,,"NO","","","",20.6,4.4,18.0,2.9,"Open Beamline"
+21,"Wall",WALL,49.950,0.100,0.100,49.900,50.000,NO,NO,NO,NO,YES,YES,NO,"#030303","",8.000,"End of Beamline",7.000,0.000,7.000,7.000,"",,"",,,"7","7","","",,,,,"Open Beamline"
