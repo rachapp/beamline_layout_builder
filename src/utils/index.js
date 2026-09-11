@@ -1,4 +1,4 @@
-import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V } from '../constants/index.js';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE } from '../constants/index.js';
 
 export const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
@@ -47,6 +47,9 @@ export const mapTemplateToItems = (templateData) => {
     if (item.type === 'XBPM') {
       dimY = dimX;
       dimZ = dimX;
+    } else if (item.type === 'SOURCE') {
+      dimY = 24;
+      dimZ = 30; // 1.5 units
     }
 
     const isSource = item.type === 'SOURCE';
@@ -117,14 +120,8 @@ export const getItemVisualHeight = (item, viewType) => {
     return viewType === 'TOP' ? th : face;
   }
   if (item.type === 'SOURCE') {
-    const sType = item.sourceType || 'Undulator';
-    if (sType === 'Bending Magnet') {
-      return viewType === 'SIDE' ? (item.dimY ?? conf.height ?? 24) : (item.dimZ ?? conf.height ?? 24);
-    }
-    // Undulator / Wiggler: top view height reduced by half of current (24px -> 12px)
     if (viewType === 'TOP') {
-      const baseH = item.dimZ ?? conf.height ?? 24;
-      return baseH / 2;
+      return 1.5 * GRID_SIZE; // 1.5 units (1.5 * 20px = 30px)
     }
     return item.dimY ?? conf.height ?? 24;
   }
@@ -144,6 +141,7 @@ export const getDefaultColors = (type, isDarkMode, theme) => {
       case 'SCREEN': return { primary: '#22c55e', secondary: theme.compBorder };
       case 'VDCM': case 'HDCM': return { primary: '#0891b2', secondary: isDarkMode ? '#164e63' : '#cffafe' };
       case 'VFM': case 'HFM': return { primary: theme.compBorder, secondary: isDarkMode ? '#475569' : '#cbd5e1' };
+      case 'VSPLIT': case 'HSPLIT': return { primary: '#10b981', secondary: isDarkMode ? '#064e3b' : '#d1fae5' };
       case 'SAMPLE': return { primary: theme.compBorder, secondary: theme.compBorder };
       case 'DETECTOR': return { primary: theme.compBg, secondary: theme.compBorder };
       case 'ANCHOR_SIDE': return { primary: '#0284c7', secondary: '#38bdf8' };

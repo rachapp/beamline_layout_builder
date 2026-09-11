@@ -16,6 +16,8 @@ export const TYPES = {
   HDCM: { id: 'HDCM', name: 'HDCM', width: 24, height: 40, defaultLength: 1.2, defaultCrystal1Length: 0.5, defaultCrystal2Length: 0.5 },
   VFM: { id: 'VFM', name: 'VFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
   HFM: { id: 'HFM', name: 'HFM', width: 40, height: 6, defaultLength: 2, defaultThickness: 0.3, defaultFaceHeight: 1.0 },
+  VSPLIT: { id: 'VSPLIT', name: 'V-Split', width: 12, height: 12, defaultLength: 0.6, defaultTiltAngle: 45, defaultDiffractAngle: 0.5 },
+  HSPLIT: { id: 'HSPLIT', name: 'H-Split', width: 12, height: 12, defaultLength: 0.6, defaultTiltAngle: 45, defaultDiffractAngle: 0.5 },
   SAMPLE: { id: 'SAMPLE', name: 'Sample', width: 12, height: 12, defaultLength: 0.6 },
   SCREEN: { id: 'SCREEN', name: 'Screen', width: 12, height: 20, defaultLength: 0.6 },
   DETECTOR: { id: 'DETECTOR', name: 'Detector', width: 21, height: 28, defaultLength: 1.05 },

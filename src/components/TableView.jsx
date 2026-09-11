@@ -271,6 +271,15 @@ export const TableView = ({
         height: conf.height / PX_PER_M,
         dimY: conf.height,
         dimZ: conf.height
+      } : {}),
+      ...(newCompType === 'SOURCE' ? {
+        sourceType: 'Undulator',
+        periodLength: 50,
+        numPeriods: 40,
+        length: 2.0,
+        dimX: 2.0 * PX_PER_M,
+        dimY: 24,
+        dimZ: 30
       } : {})
     };
 
@@ -706,6 +715,7 @@ export const TableView = ({
               <th className="py-2 px-2 text-right" title="Side View Canvas Label Offset Y (px)">Side Y (px)</th>
               <th className="py-2 px-2 text-right" title="Top View Canvas Label Offset X (px)">Top X (px)</th>
               <th className="py-2 px-2 text-right" title="Top View Canvas Label Offset Y (px)">Top Y (px)</th>
+              <th className="py-2 px-3" title="Ray branch (Straight / Diffracted) after beam splitter">Branch</th>
               <th className="py-2 px-3">Enclosure / Station</th>
               <th className="py-2 px-3 text-center w-28">Actions</th>
             </tr>
@@ -713,7 +723,7 @@ export const TableView = ({
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="22" className="py-8 text-center opacity-60 font-bold">
+                <td colSpan="23" className="py-8 text-center opacity-60 font-bold">
                   No components match the current filter or search criteria.
                 </td>
               </tr>
@@ -1066,6 +1076,30 @@ export const TableView = ({
                         onChange={(val) => handleCellChange(row.id, 'labelTopY', val)}
                         className="w-14 text-right py-0.5 px-1 font-mono text-[11px] border border-transparent hover:border-gray-400/40 bg-transparent rounded outline-none"
                       />
+                    </td>
+
+                    {/* Branch — only visible when a splitter exists */}
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      {row.branch ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const nextBranch = row.branch === 'diffracted' ? 'straight' : 'diffracted';
+                            setItems(prev => prev.map(i => i.id === row.id ? { ...i, branch: nextBranch } : i));
+                          }}
+                          title="Click to toggle branch (Straight / Diffracted)"
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors hover:opacity-80 cursor-pointer ${
+                            row.branch === 'diffracted'
+                              ? 'bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
+                              : 'bg-blue-500/10 border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20'
+                          }`}
+                        >
+                          {row.branch === 'diffracted' ? '⬡ Diffracted' : '→ Straight'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] opacity-30">—</span>
+                      )}
                     </td>
 
                     {/* Enclosure / Section */}

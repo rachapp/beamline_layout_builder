@@ -364,6 +364,11 @@ export const getItemMiscParams = (item, activeView) => {
     miscB = item.miscB ?? '';
     miscC = item.miscC ?? '';
     miscD = item.miscD ?? '';
+  } else if (['VSPLIT', 'HSPLIT'].includes(type)) {
+    miscA = item.tiltAngle ?? 45;
+    miscB = item.diffractAngle ?? 0.5;
+    miscC = item.miscC ?? '';
+    miscD = item.miscD ?? '';
   } else {
     miscA = item.miscA ?? '';
     miscB = item.miscB ?? '';
@@ -424,6 +429,14 @@ export const getMiscParamLabels = (type) => {
       miscB: 'Grazing/Deflect (°)',
       miscC: 'Focal Len (m)',
       miscD: 'Thickness (m)'
+    };
+  }
+  if (['VSPLIT', 'HSPLIT'].includes(type)) {
+    return {
+      miscA: 'Tilt Angle (°)',
+      miscB: 'Diffract Angle (°)',
+      miscC: 'Misc C',
+      miscD: 'Misc D'
     };
   }
   if (type === 'SOURCE') {
@@ -539,6 +552,7 @@ export const setItemMiscParam = (item, key, val, activeView) => {
         updated.start = parseFloat((updated.end - updated.length).toFixed(3));
       }
     }
+    else if (['VSPLIT', 'HSPLIT'].includes(type)) updated.tiltAngle = parseFloat(val) || 45;
     else if (type === 'DETECTOR') updated.detectorType = val;
     else if (type === 'SAMPLE') updated.passLight = ['yes', 'true', '1'].includes(String(val).toLowerCase());
     else updated.miscA = val;
@@ -574,6 +588,7 @@ export const setItemMiscParam = (item, key, val, activeView) => {
         }
       }
     }
+    else if (['VSPLIT', 'HSPLIT'].includes(type)) updated.diffractAngle = parseFloat(val) || 0.5;
     else if (type === 'DETECTOR') updated.passLight = ['yes', 'true', '1'].includes(String(val).toLowerCase());
     else updated.miscB = val;
   } else if (key === 'miscC') {
@@ -724,7 +739,16 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
         }
       } else {
         // Optical items and walls check gap to next optical item or wall (excluding enclosing hutches)
-        const nextPhysical = sorted.slice(idx + 1).find(i => !( ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type) || i.detectorType === 'Virtual Anchor' || i.isInvisible || i.type === 'HUTCH'));
+        // Also respect branch: if downstream of a splitter, only compare same-branch items
+        const itemBranch = item.branch || 'straight';
+        const nextPhysical = sorted.slice(idx + 1).find(i => {
+          if (['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(i.type) || i.detectorType === 'Virtual Anchor' || i.isInvisible || i.type === 'HUTCH') return false;
+          // VSPLIT/HSPLIT are shared (not branch-specific), always check them
+          if (i.type === 'VSPLIT' || i.type === 'HSPLIT' || item.type === 'VSPLIT' || item.type === 'HSPLIT') return true;
+          // If either item has a branch, both must be on the same branch
+          if (i.branch && itemBranch && i.branch !== itemBranch) return false;
+          return true;
+        });
         if (nextPhysical) {
           const nextBounds = getItemBoundsM(nextPhysical);
           gapToNext = parseFloat((nextBounds.start - bounds.end).toFixed(3));
@@ -796,6 +820,7 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
       nextItemName,
       isOverlap: hasSpatialOverlap,
       overlapAmount: hasSpatialOverlap ? Math.abs(gapToNext) : 0,
+      branch: item.branch || null,
       statusText: isVirtualAnchor ? 'Anchor Point' : (hasSpatialOverlap ? 'Overlap' : (gapToNext === 0 ? 'Abutting' : 'OK'))
     };
   });
@@ -807,6 +832,11 @@ export const computeConstructionSchedule = (items = [], canvasLength = 50) => {
       const isAnchorA = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(opt.type) || opt.detectorType === 'Virtual Anchor' || opt.isInvisible;
       const isAnchorB = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(nextOpt.type) || nextOpt.detectorType === 'Virtual Anchor' || nextOpt.isInvisible;
       if (isAnchorA || isAnchorB) return;
+
+      // Skip cross-branch collision check: items on different branches don't share the same beam path
+      const branchA = opt.branch || 'straight';
+      const branchB = nextOpt.branch || 'straight';
+      if (branchA !== branchB) return;
 
       const currB = getItemBoundsM(opt);
       const nextB = getItemBoundsM(nextOpt);
@@ -884,6 +914,7 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     'Label Side Y (px)',
     'Label Top X (px)',
     'Label Top Y (px)',
+    'Branch',
     'Enclosure / Section'
   ];
 
@@ -923,6 +954,10 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
     const labelTopXStr = item.labelOffsets?.TOP?.x !== undefined ? Number(item.labelOffsets.TOP.x).toFixed(1) : '';
     const labelTopYStr = item.labelOffsets?.TOP?.y !== undefined ? Number(item.labelOffsets.TOP.y).toFixed(1) : '';
 
+    const branchStr = (r.branch === 'diffracted' || item.branch === 'diffracted')
+      ? 'Diffracted'
+      : ((r.branch === 'straight' || item.branch === 'straight') ? 'Straight' : '');
+
     const row = [
       r.index,
       `"${(r.name || '').replace(/"/g, '""')}"`,
@@ -960,6 +995,7 @@ export const generateCsvContent = (scheduleData, beamlineName = 'Synchrotron Bea
       labelSideYStr,
       labelTopXStr,
       labelTopYStr,
+      `"${branchStr}"`,
       `"${(r.enclosureName || '').replace(/"/g, '""')}"`
     ];
     lines.push(row.join(','));
@@ -1054,6 +1090,7 @@ export const parseCsvToItems = (csvText) => {
   const labelTopYIdx = getCol('labeltopypx', 'labeltopy', 'labeltopy_px');
   const labelXIdx = getCol('labeloffsetxpx', 'labeloffsetx', 'labelx');
   const labelYIdx = getCol('labeloffsetypx', 'labeloffsety', 'labely');
+  const branchIdx = getCol('branch', 'raybranch');
 
   const items = [];
   const now = Date.now();
@@ -1189,7 +1226,7 @@ export const parseCsvToItems = (csvText) => {
     } else if (isSource) {
       dimX = physLen * PX_PER_M;
       dimY = conf.height;
-      dimZ = conf.width;
+      dimZ = 30; // 1.5 units (1.5 * 20px = 30px)
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
       y = 150 - h_mm * PX_PER_MM_V;
@@ -1214,17 +1251,24 @@ export const parseCsvToItems = (csvText) => {
     } else {
       dimX = physLen * PX_PER_M;
       dimY = conf.height;
-      dimZ = conf.height;
+      dimZ = (compType === 'SOURCE') ? 30 : conf.height;
       actualDistance = dist;
       x = ORIGIN_X + dist * PX_PER_M;
       y = 150 - h_mm * PX_PER_MM_V;
       z = 150 + o_mm * PX_PER_MM_V;
     }
 
+    const rawBranch = (branchIdx !== -1 && cols[branchIdx]) ? cols[branchIdx].trim().toLowerCase() : '';
+    let branch = undefined;
+    if (rawBranch.includes('diffract')) branch = 'diffracted';
+    else if (rawBranch.includes('straight')) branch = 'straight';
+
     let item = {
       id: `imported_${now}_${i}`,
       type: compType,
       customName: name,
+      name: name,
+      ...(branch ? { branch } : {}),
       distance: actualDistance,
       physicalLength: physLen,
       length: physLen,
@@ -1300,8 +1344,15 @@ export const parseCsvToItems = (csvText) => {
       item.end = dist;
     }
 
-    // Source Ray Specifics
+    // Source Ray Specifics: protect physicalLength, start, and end from being overwritten by misc params
     if (isSource) {
+      if (physLenIdx !== -1 && !isNaN(parseFloat(cols[physLenIdx]))) {
+        item.physicalLength = physLen;
+        item.length = physLen;
+        item.dimX = physLen * PX_PER_M;
+        if (startVal !== undefined) item.start = startVal;
+        if (endVal !== undefined) item.end = endVal;
+      }
       if (rayColorIdx !== -1 && cols[rayColorIdx]) item.rayColor = cols[rayColorIdx].trim();
       if (rayWidthIdx !== -1 && !isNaN(parseFloat(cols[rayWidthIdx]))) item.rayWidth = parseFloat(cols[rayWidthIdx]);
       if (rayStyleIdx !== -1 && cols[rayStyleIdx]) item.rayStyle = cols[rayStyleIdx].trim();
@@ -1309,6 +1360,9 @@ export const parseCsvToItems = (csvText) => {
       if (showRayArrowIdx !== -1 && cols[showRayArrowIdx]) item.showArrow = !['no', 'false', '0'].includes(cols[showRayArrowIdx].toLowerCase());
       if (animateRayIdx !== -1 && cols[animateRayIdx]) item.animate = !['no', 'false', '0'].includes(cols[animateRayIdx].toLowerCase());
     }
+
+    // Ensure branch is maintained
+    if (branch) item.branch = branch;
 
     // Label Offset Coordinates Handling
     // Safely parse so default labels are not pushed into component center
@@ -1323,18 +1377,18 @@ export const parseCsvToItems = (csvText) => {
     const tX = labelTopXIdx !== -1 ? parseLabelCoord(cols[labelTopXIdx]) : undefined;
     const tY = labelTopYIdx !== -1 ? parseLabelCoord(cols[labelTopYIdx]) : undefined;
 
-    // Only set labelOffsets if explicitly defined and not the legacy dummy 0.0 value
-    if (sX !== undefined || (sY !== undefined && sY !== 0)) {
+    // Only set labelOffsets if explicitly defined in CSV (empty means default placement)
+    if (sX !== undefined || sY !== undefined) {
       item.labelOffsets = item.labelOffsets || {};
       item.labelOffsets.SIDE = { ...(item.labelOffsets.SIDE || {}) };
       if (sX !== undefined) item.labelOffsets.SIDE.x = sX;
-      if (sY !== undefined && sY !== 0) item.labelOffsets.SIDE.y = sY;
+      if (sY !== undefined) item.labelOffsets.SIDE.y = sY;
     }
-    if (tX !== undefined || (tY !== undefined && tY !== 0)) {
+    if (tX !== undefined || tY !== undefined) {
       item.labelOffsets = item.labelOffsets || {};
       item.labelOffsets.TOP = { ...(item.labelOffsets.TOP || {}) };
       if (tX !== undefined) item.labelOffsets.TOP.x = tX;
-      if (tY !== undefined && tY !== 0) item.labelOffsets.TOP.y = tY;
+      if (tY !== undefined) item.labelOffsets.TOP.y = tY;
     }
 
     if (['VDCM', 'HDCM'].includes(compType)) {

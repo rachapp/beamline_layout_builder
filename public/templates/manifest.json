@@ -30,6 +30,11 @@
     "url": "./templates/SPS-II_SWAXS.csv"
   },
   {
+    "name": "SPS-II_SWAXS_1",
+    "fileName": "SPS-II_SWAXS_1.csv",
+    "url": "./templates/SPS-II_SWAXS_1.csv"
+  },
+  {
     "name": "SPS-II_TXAS",
     "fileName": "SPS-II_TXAS.csv",
     "url": "./templates/SPS-II_TXAS.csv"

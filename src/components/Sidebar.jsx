@@ -245,7 +245,7 @@ export const Sidebar = ({
 
         <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${theme.text}`}>Add Optics</p>
         <div className="flex flex-col gap-2 mb-6">
-          {['SOURCE', 'SLIT', 'FILTER', 'XBPM', 'GRATING', 'VDCM', 'HDCM', 'VFM', 'HFM', 'SAMPLE', 'SCREEN', 'DETECTOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].map((key) => {
+          {['SOURCE', 'SLIT', 'FILTER', 'XBPM', 'GRATING', 'VDCM', 'HDCM', 'VFM', 'HFM', 'VSPLIT', 'HSPLIT', 'SAMPLE', 'SCREEN', 'DETECTOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].map((key) => {
             const type = TYPES[key];
             return (
               <button key={type.id} onClick={() => addItem(type.id)} className={`flex items-center gap-3 p-3 border rounded-none transition-all text-left group ${placingType === type.id ? 'bg-blue-50 border-blue-400' : theme.buttonBg}`}>

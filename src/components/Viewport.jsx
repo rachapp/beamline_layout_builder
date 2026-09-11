@@ -6,14 +6,15 @@ import { getOpticPhysicalLengthM, getItemBoundsM, calculateUpdatedBounds } from 
 import { getItemVisualHeight } from '../utils';
 
 export const Viewport = ({ 
-  viewType, title, refObj, scrollRef, planeCoord, tracePoints, theme, 
+  viewType, title, refObj, scrollRef, planeCoord, tracePoints, tracePointsBranch = [], theme, 
   draggingInfo, placingType, pan, zoom, showGrid, showRuler, showAnnotations = true, canvasWidth, 
   isDarkMode, computedItems, selectedId, setSelectedId, editingLabel, rayColor, 
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
   handleResizePointerDown, handleLabelPointerDown, handleLabelDoubleClick,
-  cancelFocusItem, setEditingLabel, setItems, ghostPos, canvasSettings
+  cancelFocusItem, setEditingLabel, setItems, ghostPos, ghostBranch, setGhostBranch, canvasSettings
 }) => {
+  const [branchFilter, setBranchFilter] = useState('all'); // 'all' | 'straight' | 'diffracted'
   const [editingAnnotation, setEditingAnnotation] = useState(null); // { id, text, posX, badgeY }
   const lastAnnotClickRef = useRef({});
   const lastLabelClickRef = useRef({});
@@ -86,10 +87,8 @@ export const Viewport = ({
 
     const sortedAnnotations = candidateItems.map((item) => {
       const isSelected = selectedId === item.id;
-      const elemY = viewType === 'SIDE' ? item.y : item.z;
-      const itemH = viewType === 'SIDE'
-        ? (item.dimY ?? TYPES[item.type]?.height ?? 20)
-        : (item.dimZ ?? TYPES[item.type]?.height ?? 20);
+      const elemY = viewType === 'SIDE' ? (item.y ?? 150) : (item.z ?? 150);
+      const itemH = getItemVisualHeight(item, viewType);
       const targetY = elemY > 65 ? (elemY - itemH / 2) : (elemY + itemH / 2);
 
       const posX = item.x;
@@ -181,12 +180,140 @@ export const Viewport = ({
   if (rayStyle === 'dashed') strokeDasharray = '8,4';
   if (rayStyle === 'dotted') strokeDasharray = '2,4';
 
+  const isItemDimmedByBranch = (item) => {
+    if (branchFilter === 'all') return false;
+    if (!item || ['WALL', 'HUTCH', 'CHAMBER', 'VSPLIT', 'HSPLIT'].includes(item.type)) return false;
+    const splitterBefore = (computedItems || []).some(it => 
+      (it.type === 'VSPLIT' || it.type === 'HSPLIT') && (it.distance || 0) <= (item.distance || 0)
+    );
+    if (!splitterBefore) return false;
+
+    const itemBranch = item.branch || 'straight';
+    if (branchFilter === 'straight' && itemBranch === 'diffracted') return true;
+    if (branchFilter === 'diffracted' && itemBranch === 'straight') return true;
+    return false;
+  };
+
+  // Helper to interpolate coordinate at x along a trace points array
+  const getRayCoordAtX = (pts, x, coord) => {
+    if (!pts || pts.length === 0) return null;
+    if (pts.length === 1) return pts[0][coord] ?? 150;
+    if (x <= pts[0].x) return pts[0][coord] ?? 150;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      if (x >= p1.x && x <= p2.x) {
+        if (p2.x === p1.x) return p1[coord] ?? 150;
+        const v1 = p1[coord] ?? 150;
+        const v2 = p2[coord] ?? 150;
+        return v1 + (v2 - v1) * ((x - p1.x) / (p2.x - p1.x));
+      }
+    }
+    const p1 = pts[pts.length - 2];
+    const p2 = pts[pts.length - 1];
+    if (p2.x === p1.x) return p2[coord] ?? 150;
+    const v1 = p1[coord] ?? 150;
+    const v2 = p2[coord] ?? 150;
+    return v1 + (v2 - v1) * ((x - p1.x) / (p2.x - p1.x));
+  };
+
+  const getRaySlopeAtX = (pts, x, coord) => {
+    if (!pts || pts.length < 2) return 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      if (x >= p1.x && x <= p2.x) {
+        const v1 = p1[coord] ?? 150;
+        const v2 = p2[coord] ?? 150;
+        return Math.atan2(v2 - v1, p2.x - p1.x);
+      }
+    }
+    const p1 = pts[pts.length - 2];
+    const p2 = pts[pts.length - 1];
+    const v1 = p1[coord] ?? 150;
+    const v2 = p2[coord] ?? 150;
+    return Math.atan2(v2 - v1, p2.x - p1.x);
+  };
+
+  // Branch auto-snap calculation for ghost preview
+  let activeGhostBranch = null;
+  let activeGhostSnappedY = ghostPos?.y;
+  let activeGhostBranchSlope = 0;
+
+  if (placingType && ghostPos?.view === viewType && !['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
+    const ghostDist = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(1));
+    const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;
+    const hasSplitterUpstream = (computedItems || []).some(
+      it => (it.type === 'VSPLIT' || it.type === 'HSPLIT') && (it.distance || 0) <= ghostDist
+    );
+
+    if (hasSplitterUpstream) {
+      const yStraight = getRayCoordAtX(tracePoints, ghostSnappedX, planeCoord);
+      const yBranch = tracePointsBranch && tracePointsBranch.length >= 2
+        ? getRayCoordAtX(tracePointsBranch, ghostSnappedX, planeCoord)
+        : null;
+
+      const distToBranch = yBranch !== null ? Math.abs(ghostPos.y - yBranch) : Infinity;
+      const distToStraight = yStraight !== null ? Math.abs(ghostPos.y - yStraight) : Infinity;
+
+      // Snap within ±10 px threshold
+      if (distToBranch <= 10 && distToBranch <= distToStraight) {
+        activeGhostSnappedY = yBranch;
+        activeGhostBranch = 'diffracted';
+        activeGhostBranchSlope = getRaySlopeAtX(tracePointsBranch, ghostSnappedX, planeCoord);
+      } else if (distToStraight <= 10) {
+        activeGhostSnappedY = yStraight;
+        activeGhostBranch = 'straight';
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (placingType && ghostPos?.view === viewType) {
+      if (ghostBranch !== activeGhostBranch) {
+        setGhostBranch?.(activeGhostBranch);
+      }
+    }
+  }, [placingType, ghostPos?.view, ghostPos?.x, ghostPos?.y, viewType, activeGhostBranch, ghostBranch, setGhostBranch]);
+
   return (
     <div className="flex-1 flex flex-col relative border-b-2 overflow-hidden" style={{ borderColor: theme.inactiveBorder, backgroundColor: theme.bg }}>
-      <div className={`absolute top-4 left-4 z-20 backdrop-blur px-3 py-1.5 shadow-sm border flex items-center gap-2 rounded-none ${theme.badgeBg}`}>
-        <Layers size={16} className={theme.text} />
-        <span className={`font-bold text-sm tracking-wide ${theme.text}`}>{title}</span>
-      </div>
+      {(() => {
+        const hasSplitter = (computedItems || []).some(item => item.type === 'VSPLIT' || item.type === 'HSPLIT');
+        return (
+          <div className={`absolute top-4 left-4 z-20 backdrop-blur px-3 py-1.5 shadow-sm border flex items-center gap-3 rounded-none ${theme.badgeBg}`}>
+            <div className="flex items-center gap-2">
+              <Layers size={16} className={theme.text} />
+              <span className={`font-bold text-sm tracking-wide ${theme.text}`}>{title}</span>
+            </div>
+            {hasSplitter && (
+              <div className="flex items-center gap-1 pl-2 border-l border-slate-300 dark:border-slate-700 text-xs">
+                <span className="text-[10px] opacity-70 uppercase tracking-wider font-bold mr-1">Branch:</span>
+                {(['all', 'straight', 'diffracted']).map((bf) => (
+                  <button
+                    key={bf}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBranchFilter(bf);
+                    }}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                      branchFilter === bf
+                        ? (bf === 'diffracted'
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : (bf === 'straight' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 shadow-sm'))
+                        : 'hover:bg-black/5 dark:hover:bg-white/10 opacity-70 hover:opacity-100'
+                    }`}
+                    title={bf === 'all' ? 'Show both straight and diffracted branches' : (bf === 'straight' ? 'Focus only on straight passthrough beam' : 'Focus only on diffracted split branch')}
+                  >
+                    {bf === 'all' ? 'Both' : (bf === 'straight' ? 'Straight' : 'Diffracted')}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       
       <div 
         ref={scrollRef}
@@ -479,14 +606,34 @@ export const Viewport = ({
               </g>
             )}
 
-            {tracePoints.length > 1 && (
+            {/* Straight ray path */}
+            {(branchFilter === 'all' || branchFilter === 'straight') && tracePoints.length > 1 && (
               <path
                 d={`M ${tracePoints.map(p => `${p.x},${p[planeCoord]}`).join(' L ')}`}
                 fill="none" stroke={rayColor} strokeWidth={rayWidth}
-                style={{ strokeDasharray, animation: (sourceItem.animate !== false && rayStyle !== 'solid') ? 'dash 1s linear infinite' : 'none' }}
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{
+                  strokeDasharray,
+                  animation: (sourceItem.animate !== false && rayStyle !== 'solid') ? 'dash 4.5s linear infinite' : 'none',
+                  willChange: (sourceItem.animate !== false && rayStyle !== 'solid') ? 'stroke-dashoffset' : 'auto'
+                }}
               />
             )}
-            {showArrow && tracePoints.slice(0, -1).map((p, i) => {
+            {/* Diffracted branch ray path */}
+            {(branchFilter === 'all' || branchFilter === 'diffracted') && tracePointsBranch && tracePointsBranch.length > 1 && (
+              <path
+                d={`M ${tracePointsBranch.map(p => `${p.x},${p[planeCoord]}`).join(' L ')}`}
+                fill="none" stroke="#f59e0b" strokeWidth={rayWidth}
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{
+                  strokeDasharray: rayStyle === 'dotted' ? '2,4' : '8,4',
+                  animation: (sourceItem.animate !== false && rayStyle !== 'solid') ? 'dash 4.5s linear infinite' : 'none',
+                  willChange: (sourceItem.animate !== false && rayStyle !== 'solid') ? 'stroke-dashoffset' : 'auto'
+                }}
+              />
+            )}
+            {/* Straight ray arrows */}
+            {(branchFilter === 'all' || branchFilter === 'straight') && showArrow && tracePoints.slice(0, -1).map((p, i) => {
               const next = tracePoints[i + 1];
               const midX = (p.x + next.x) / 2;
               const midY = (p[planeCoord] + next[planeCoord]) / 2;
@@ -494,6 +641,18 @@ export const Viewport = ({
               return (
                 <g key={`arrow-${i}`} transform={`translate(${midX}, ${midY}) rotate(${angle})`}>
                   <polygon points="-4,-3 4,0 -4,3" fill={rayColor} />
+                </g>
+              );
+            })}
+            {/* Diffracted branch arrows */}
+            {(branchFilter === 'all' || branchFilter === 'diffracted') && showArrow && tracePointsBranch && tracePointsBranch.slice(0, -1).map((p, i) => {
+              const next = tracePointsBranch[i + 1];
+              const midX = (p.x + next.x) / 2;
+              const midY = (p[planeCoord] + next[planeCoord]) / 2;
+              const angle = Math.atan2(next[planeCoord] - p[planeCoord], next.x - p.x) * (180 / Math.PI);
+              return (
+                <g key={`arrow-branch-${i}`} transform={`translate(${midX}, ${midY}) rotate(${angle})`}>
+                  <polygon points="-4,-3 4,0 -4,3" fill="#f59e0b" />
                 </g>
               );
             })}
@@ -507,6 +666,7 @@ export const Viewport = ({
                 if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
                 if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
                 if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
+                if (isItemDimmedByBranch(item)) return null;
                 const isEditingThis = editingAnnotation?.id === item.id;
 
                 if (isEditingThis) {
@@ -679,22 +839,39 @@ export const Viewport = ({
               }
 
               let rotation = 0;
+              const isDiffBranch = item.branch === 'diffracted';
+              const activeTrace = (isDiffBranch ? tracePointsBranch : tracePoints) || [];
+
               if (item.type === 'GRATING' || isSimpleMirrorActive) {
-                  const pIdx = tracePoints.findIndex(p => p.parentId === item.id && p.sub === 0);
-                  if (pIdx > 0 && pIdx < tracePoints.length - 1) {
-                      const p = tracePoints[pIdx];
-                      const prev = tracePoints[pIdx - 1];
-                      const next = tracePoints[pIdx + 1];
-                      const angleIn = Math.atan2(p[planeCoord] - prev[planeCoord], p.x - prev.x);
-                      const angleOut = Math.atan2(next[planeCoord] - p[planeCoord], next.x - p.x);
+                  const pIdx = activeTrace.findIndex(p => p.parentId === item.id);
+                  if (pIdx > 0 && pIdx < activeTrace.length - 1) {
+                      const p = activeTrace[pIdx];
+                      const prev = activeTrace[pIdx - 1];
+                      const next = activeTrace[pIdx + 1];
+                      const py = p[planeCoord] ?? 150;
+                      const prevy = prev[planeCoord] ?? 150;
+                      const nexty = next[planeCoord] ?? 150;
+                      const angleIn = Math.atan2(py - prevy, p.x - prev.x);
+                      const angleOut = Math.atan2(nexty - py, next.x - p.x);
                       rotation = (angleIn + angleOut) / 2;
                       if (angleIn < angleOut) rotation += Math.PI;
                       if (item.type === 'GRATING') {
                           rotation -= (parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
                       }
+                  } else if (pIdx > 0) {
+                      const p = activeTrace[pIdx];
+                      const prev = activeTrace[pIdx - 1];
+                      const py = p[planeCoord] ?? 150;
+                      const prevy = prev[planeCoord] ?? 150;
+                      rotation = Math.atan2(py - prevy, p.x - prev.x);
                   } else if (item.type === 'GRATING' && isGratingActive) {
                       rotation = -(parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
+                  } else if (isDiffBranch) {
+                      rotation = getRaySlopeAtX(tracePointsBranch, item.x, planeCoord);
                   }
+              } else if (isDiffBranch && !['WALL', 'HUTCH', 'CHAMBER', 'VSPLIT', 'HSPLIT', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) {
+                  // All optics on diffracted branch rotate along the branch slope as the new 0° axis
+                  rotation = getRaySlopeAtX(tracePointsBranch, item.x, planeCoord);
               }
 
               let dcmAnchorX = 0;
@@ -754,14 +931,16 @@ export const Viewport = ({
               const globalShowLabels = canvasSettings?.showLabels !== false;
               const labelVisible = !isAnchorType && (isEditing || (globalShowLabels && (item.showLabel !== false)));
 
+              const isDimmed = isItemDimmedByBranch(item);
+
               return (
                 <div
                   key={item.id}
-                  className={`absolute ${zIndexClass} pointer-events-auto`}
+                  className={`absolute ${zIndexClass} ${isDimmed ? 'opacity-25 pointer-events-none' : 'pointer-events-auto'}`}
                   style={{
                     left: item.x,
                     top: item[planeCoord],
-                    zIndex: zIndex,
+                    zIndex: isDimmed ? 5 : zIndex,
                     transition: isDraggingThis ? 'none' : 'left 0.1s ease-out, top 0.1s ease-out'
                   }}
                 >
@@ -995,11 +1174,12 @@ export const Viewport = ({
                const conf = TYPES[placingType] || { width: 8, height: 8 };
                const mockItem = { 
                  type: placingType, 
-                 orientation: 'Vertical', 
+                 orientation: placingType === 'HSPLIT' ? 'Horizontal' : 'Vertical', 
                  tiltAngle: 45,
+                 diffractAngle: 0.5,
                  dimX: placingType === 'HUTCH' ? 200 : (placingType === 'WALL' ? 24 : conf.width),
                  dimY: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'HFM' ? 20 : conf.height)),
-                 dimZ: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'VFM' ? 20 : conf.height)),
+                 dimZ: placingType === 'HUTCH' ? 140 : (placingType === 'WALL' ? 140 : (placingType === 'VFM' ? 20 : (placingType === 'SOURCE' ? 30 : conf.height))),
                  passLight: true,
                  detectorType: 'Silicon Detector',
                  ...(isDCMPlacing ? { exitOffset: 25, braggAngle: 45, crystal1Length: 0.5, crystal2Length: 0.5 } : {})
@@ -1021,40 +1201,63 @@ export const Viewport = ({
 
                const isAnchorPlacing = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType);
                const itemW = isAnchorPlacing ? 8 : mockItem.dimX;
-               const itemH = isAnchorPlacing ? 8 : (placingType === 'XBPM' ? itemW : (viewType === 'SIDE' ? mockItem.dimY : mockItem.dimZ)); 
+               const itemH = isAnchorPlacing ? 8 : (placingType === 'XBPM' ? itemW : getItemVisualHeight(mockItem, viewType)); 
                
                const ghostDist = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(1));
                const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;
 
-               let ghostY = ghostPos.y;
-               if (['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
-                  if (placingType === 'CHAMBER') {
-                    ghostY = 150; // Always snap to beam path
-                  } else if (viewType === 'SIDE') {
-                    ghostY = 200 - itemH / 2; // Floor snap
-                  }
-               }
+                let ghostY = activeGhostSnappedY !== undefined && activeGhostSnappedY !== null ? activeGhostSnappedY : ghostPos.y;
+                if (['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
+                   if (placingType === 'CHAMBER') {
+                     ghostY = 150; // Always snap to beam path
+                   } else if (viewType === 'SIDE') {
+                     ghostY = 200 - itemH / 2; // Floor snap
+                   }
+                }
 
-               let rotation = 0;
-               if (placingType === 'GRATING' && isGratingActive) {
-                   rotation = -45 * Math.PI / 180;
-               }
+                let rotation = 0;
+                if (activeGhostBranch === 'diffracted' && !['WALL', 'HUTCH', 'CHAMBER', 'VSPLIT', 'HSPLIT', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType)) {
+                    rotation = activeGhostBranchSlope;
+                    if (placingType === 'GRATING' && isGratingActive) {
+                        rotation -= 45 * Math.PI / 180;
+                    }
+                } else if (placingType === 'GRATING' && isGratingActive) {
+                    rotation = -45 * Math.PI / 180;
+                }
 
-               return (
-                 <div
-                   className="absolute z-50 opacity-50 pointer-events-none drop-shadow-md"
-                   style={{
-                     left: ghostSnappedX,
-                     top: ghostY,
-                     width: itemW,
-                     height: itemH,
-                     transformOrigin,
-                     transform: `${transformOffset} rotate(${rotation}rad)`
-                   }}
-                 >
-                    <OpticalComponent item={mockItem} itemW={itemW} dcmAnchorX={dcmAnchorX} dcmAnchorY={dcmAnchorY} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
-                 </div>
-               );
+                return (
+                  <div
+                    className={`absolute z-50 pointer-events-none drop-shadow-md transition-all duration-75 ${
+                      activeGhostBranch === 'diffracted'
+                        ? 'ring-2 ring-amber-500 rounded-sm shadow-[0_0_12px_rgba(245,158,11,0.6)]'
+                        : (activeGhostBranch === 'straight'
+                            ? 'ring-2 ring-blue-500 rounded-sm shadow-[0_0_12px_rgba(59,130,246,0.6)]'
+                            : 'opacity-50')
+                    }`}
+                    style={{
+                      left: ghostSnappedX,
+                      top: ghostY,
+                      width: itemW,
+                      height: itemH,
+                      transformOrigin,
+                      transform: `${transformOffset} rotate(${rotation}rad)`
+                    }}
+                  >
+                     {/* Snapped branch badge tooltip */}
+                     {activeGhostBranch && (
+                       <div
+                         className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded text-[9px] font-bold shadow whitespace-nowrap z-50 flex items-center gap-1 ${
+                           activeGhostBranch === 'diffracted'
+                             ? 'bg-amber-500 text-white shadow-amber-500/50'
+                             : 'bg-blue-600 text-white shadow-blue-600/50'
+                         }`}
+                       >
+                         {activeGhostBranch === 'diffracted' ? '⬡ Diffracted' : '→ Straight'}
+                       </div>
+                     )}
+                     <OpticalComponent item={mockItem} itemW={itemW} dcmAnchorX={dcmAnchorX} dcmAnchorY={dcmAnchorY} viewType={viewType} tracePoints={[]} theme={theme} isDarkMode={isDarkMode} />
+                  </div>
+                );
             })()}
           </div>
         </div>

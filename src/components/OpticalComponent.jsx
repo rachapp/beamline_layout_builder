@@ -185,6 +185,38 @@ export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAn
       </div>
     );
   }
+
+  if (type === 'VSPLIT' || type === 'HSPLIT') {
+    const isInactive = (type === 'VSPLIT' && viewType === 'TOP') || (type === 'HSPLIT' && viewType === 'SIDE');
+    if (isInactive) {
+      return (
+        <div className="w-full h-full flex flex-col justify-center shadow-sm opacity-90 rounded-none" style={{ backgroundColor: theme.inactiveBg, border: `1.5px solid ${theme.inactiveBorder}` }}>
+          <div className="w-full h-[1.5px]" style={{ backgroundColor: theme.inactiveBorder }} />
+        </div>
+      );
+    }
+    const tilt = item.tiltAngle !== undefined ? item.tiltAngle : 45;
+    return (
+      <div className="w-full h-full flex items-center justify-center relative overflow-visible pointer-events-none">
+        <div 
+          className="w-[3px] h-[85%] rounded-[1px] shadow-sm relative pointer-events-auto"
+          style={{
+            backgroundColor: primary,
+            border: `1px solid ${secondary}`,
+            transform: `rotate(-${tilt}deg)`,
+            transformOrigin: 'center center',
+            boxShadow: isDarkMode ? '0 0 4px rgba(16, 185, 129, 0.5)' : '0 0 2px rgba(16, 185, 129, 0.4)'
+          }}
+        >
+          {/* Center optical split indicator */}
+          <div 
+            className="absolute w-[4px] h-[4px] rounded-full left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{ backgroundColor: '#f59e0b', opacity: 0.9, boxShadow: '0 0 4px #f59e0b' }}
+          />
+        </div>
+      </div>
+    );
+  }
   
   if (type === 'VDCM' || type === 'HDCM') {
     const isInactive = (type === 'VDCM' && viewType === 'TOP') || (type === 'HDCM' && viewType === 'SIDE');

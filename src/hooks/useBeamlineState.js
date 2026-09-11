@@ -50,6 +50,8 @@ export const useBeamlineState = (computedItems) => {
   
   const [placingType, setPlacingType] = useState(null);
   const [ghostPos, setGhostPos] = useState(null);
+  // Which branch the ghost is currently snapped to ('straight' | 'diffracted' | null)
+  const [ghostBranch, setGhostBranch] = useState(null);
 
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -184,6 +186,10 @@ export const useBeamlineState = (computedItems) => {
             dimY: 40,
             dimZ: 40
           };
+        }
+        if (item.type === 'SOURCE' && (item.dimZ !== 30 || item.dimY !== 24)) {
+          changed = true;
+          return { ...item, dimY: 24, dimZ: 30 };
         }
         return item;
       });
@@ -514,6 +520,7 @@ export const useBeamlineState = (computedItems) => {
       if (e.key === 'Escape') {
         setPlacingType(null);
         setGhostPos(null);
+        setGhostBranch(null);
         setEditingLabel(null);
         return;
       }
@@ -782,7 +789,10 @@ export const useBeamlineState = (computedItems) => {
           sourceType: 'Undulator',
           periodLength: 50,
           numPeriods: 40,
-          length: 2.0
+          length: 2.0,
+          dimX: 2.0 * PX_PER_M,
+          dimY: 24,
+          dimZ: 30
         } : {}),
         ...(placingType === 'XBPM' ? { 
           length: 0.425,
@@ -805,6 +815,26 @@ export const useBeamlineState = (computedItems) => {
         } : {}),
         ...(placingType === 'VFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
         ...(placingType === 'HFM' ? { substrateThickness: 0.3, faceHeight: 1.0, length: 2.0, physicalLength: 2.0 } : {}),
+        ...(placingType === 'VSPLIT' ? { 
+          orientation: 'Vertical', 
+          tiltAngle: 45, 
+          diffractAngle: 0.5,
+          length: 0.6,
+          physicalLength: 0.6,
+          dimX: 12,
+          dimY: 12,
+          dimZ: 12
+        } : {}),
+        ...(placingType === 'HSPLIT' ? { 
+          orientation: 'Horizontal', 
+          tiltAngle: 45, 
+          diffractAngle: 0.5,
+          length: 0.6,
+          physicalLength: 0.6,
+          dimX: 12,
+          dimY: 12,
+          dimZ: 12
+        } : {}),
         ...(isRange ? { 
            start: parseFloat((newDistance - (conf.width / 2 / PX_PER_M)).toFixed(2)), 
            end: parseFloat((newDistance + (conf.width / 2 / PX_PER_M)).toFixed(2)),
@@ -829,11 +859,17 @@ export const useBeamlineState = (computedItems) => {
         } : {})
       };
 
+      // If the item is being placed and there's a snapped branch, assign it
+      if (ghostBranch) {
+        newItem.branch = ghostBranch;
+      }
+
       setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
       setSelectedId(newItem.id);
       setLastClickedView(view);
       setPlacingType(null);
       setGhostPos(null);
+      setGhostBranch(null);
       return; 
     }
     cancelFocusItem();
@@ -1400,7 +1436,7 @@ export const useBeamlineState = (computedItems) => {
 
   return {
     items, setItems, selectedId, setSelectedId, draggingInfo, setDraggingInfo,
-    editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos,
+    editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos, ghostBranch, setGhostBranch,
     zoom, setZoom, showGrid, setShowGrid, snapToGrid, setSnapToGrid, showRuler, setShowRuler,
     showAnnotations, setShowAnnotations,
     canvasLength, setCanvasLength, showUI, setShowUI, activeView, setActiveView: handleSetActiveView,

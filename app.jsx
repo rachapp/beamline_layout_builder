@@ -13,21 +13,64 @@ import { TableView } from './src/components/TableView';
 import { CadSvgExportModal } from './src/components/CadSvgExportModal';
 import { downloadCsv } from './src/utils/constructionUtils';
 
-export default function App() {
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Beamline App ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen w-full bg-slate-900 text-white p-6">
+          <div className="bg-slate-800 border border-red-500 rounded-lg p-6 max-w-lg shadow-xl text-center">
+            <h2 className="text-xl font-bold text-red-400 mb-2">Something went wrong</h2>
+            <p className="text-sm text-gray-300 mb-4">{this.state.error?.message || 'An unexpected rendering error occurred.'}</p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-sm transition-colors"
+              >
+                Reload Application
+              </button>
+              <button
+                onClick={() => {
+                  try { localStorage.clear(); } catch(e) {}
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-gray-200 font-semibold rounded text-sm transition-colors"
+              >
+                Reset & Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function BeamlineLayoutApp() {
   const { isDarkMode, setIsDarkMode, theme } = useTheme();
   
   // Initialize state with a placeholder, then use physics engine to compute
   const state = useBeamlineState([]);
-  const { computedItems, tracePointsSide, tracePointsTop } = usePhysicsEngine(state.items);
+  const { computedItems, tracePointsSide, tracePointsTop, tracePointsSideBranch, tracePointsTopBranch } = usePhysicsEngine(state.items);
 
   useEffect(() => {
     state.setComputedItems?.(computedItems);
   }, [computedItems]);
 
-  const rayColor = state.sourceItem.rayColor || theme.beam;
-  const rayWidth = state.sourceItem.rayWidth ?? 1.5;
-  const rayStyle = state.sourceItem.rayStyle || 'dashed';
-  const showArrow = state.sourceItem.showArrow !== false;
+  const rayColor = state.sourceItem?.rayColor || theme.beam;
+  const rayWidth = state.sourceItem?.rayWidth ?? 1.5;
+  const rayStyle = state.sourceItem?.rayStyle || 'dashed';
+  const showArrow = state.sourceItem?.showArrow !== false;
 
   return (
     <div className={`flex h-screen w-full font-sans overflow-hidden select-none ${isDarkMode ? 'dark ' : ''}${theme.bg}`}>
@@ -165,6 +208,7 @@ export default function App() {
             scrollRef={state.topScrollRef}
             planeCoord="z"
             tracePoints={tracePointsTop}
+            tracePointsBranch={tracePointsTopBranch}
             theme={theme}
             draggingInfo={state.draggingInfo}
             placingType={state.placingType}
@@ -196,6 +240,8 @@ export default function App() {
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
+            ghostBranch={state.ghostBranch}
+            setGhostBranch={state.setGhostBranch}
             canvasSettings={state.canvasSettings}
           />
         )}
@@ -208,6 +254,7 @@ export default function App() {
             scrollRef={state.sideScrollRef}
             planeCoord="y"
             tracePoints={tracePointsSide}
+            tracePointsBranch={tracePointsSideBranch}
             theme={theme}
             draggingInfo={state.draggingInfo}
             placingType={state.placingType}
@@ -239,6 +286,8 @@ export default function App() {
             setEditingLabel={state.setEditingLabel}
             setItems={state.setItems}
             ghostPos={state.ghostPos}
+            ghostBranch={state.ghostBranch}
+            setGhostBranch={state.setGhostBranch}
             canvasSettings={state.canvasSettings}
           />
         )}
@@ -304,5 +353,13 @@ export default function App() {
         isDarkMode={isDarkMode}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <BeamlineLayoutApp />
+    </ErrorBoundary>
   );
 }

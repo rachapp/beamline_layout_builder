@@ -897,7 +897,92 @@ export const PropertiesWidget = ({
               </div>
             )}
 
-            {/* 4. MIRRORS (VFM / HFM) SPECIFIC */}
+            {/* 4. BEAM SPLITTER (VSPLIT / HSPLIT) SPECIFIC */}
+            {['VSPLIT', 'HSPLIT'].includes(selectedItem.type) && (
+              <div className="space-y-2 pt-2 border-t border-slate-500/20">
+                {/* Splitting plane info */}
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-none">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                      Beam Splitter
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 rounded font-bold">
+                      {selectedItem.type === 'VSPLIT' ? 'V-Split (Side View)' : 'H-Split (Top View)'}
+                    </span>
+                  </div>
+                  <p className="text-[9px] opacity-70 leading-tight">
+                    Splits beam into a straight (passthrough) and a diffracted (amber) branch.
+                  </p>
+                </div>
+
+                {/* Tilt angle */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Plate Tilt (°)</label>
+                  <BufferedNumberInput
+                    step={1}
+                    min={5}
+                    max={85}
+                    value={selectedItem.tiltAngle ?? 45}
+                    onChange={(val) => updateItemProp('tiltAngle', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                  <p className="text-[9px] opacity-60 italic leading-tight mt-0.5">Visual rotation of the splitter plate on canvas (5–85°)</p>
+                </div>
+
+                {/* Diffract angle */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase mb-1">Diffract Angle (°)</label>
+                  <BufferedNumberInput
+                    step={0.1}
+                    min={0.01}
+                    max={5}
+                    value={selectedItem.diffractAngle ?? 0.5}
+                    onChange={(val) => updateItemProp('diffractAngle', val)}
+                    className={`w-full text-xs font-bold border rounded-none p-1.5 outline-none ${theme.buttonBg} ${theme.text}`}
+                  />
+                  <p className="text-[9px] opacity-60 italic leading-tight mt-0.5">
+                    Angle of diffracted branch (overridden by downstream anchor). Computed: <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{(selectedItem.diffractAngleDeg ?? selectedItem.diffractAngle ?? 0.5).toFixed(3)}°</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 4b. DOWNSTREAM BRANCH INDICATOR — for items downstream of a splitter */}
+            {!['VSPLIT', 'HSPLIT', 'WALL', 'HUTCH', 'CHAMBER', 'SOURCE'].includes(selectedItem.type) && (() => {
+              const hasSplitterUpstream = (items || []).some(it => 
+                (it.type === 'VSPLIT' || it.type === 'HSPLIT') && 
+                (it.distance || 0) < (selectedItem.distance || 0)
+              );
+              if (!hasSplitterUpstream) return null;
+              const branch = selectedItem.branch || 'straight';
+              return (
+                <div className="pt-2 border-t border-slate-500/20">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold uppercase">Ray Branch</label>
+                    <span className="text-[9px] opacity-60">after beam splitter</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateItemProp('branch', 'straight')}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${branch === 'straight' ? 'bg-blue-600 text-white' : `border ${theme.buttonBg} ${theme.text} opacity-60 hover:opacity-100`}`}
+                    >
+                      → Straight Branch
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateItemProp('branch', 'diffracted')}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${branch === 'diffracted' ? 'bg-amber-500 text-white' : `border ${theme.buttonBg} ${theme.text} opacity-60 hover:opacity-100`}`}
+                    >
+                      ⬡ Diffracted Branch
+                    </button>
+                  </div>
+                  <p className="text-[9px] opacity-60 italic leading-tight mt-1">Select whether this component or anchor steers the main straight beamline or the diffracted branch.</p>
+                </div>
+              );
+            })()}
+
+            {/* 5. MIRRORS (VFM / HFM) SPECIFIC */}
             {['VFM', 'HFM'].includes(selectedItem.type) && (() => {
               const grazingMrad = selectedItem.grazingAngleMrad !== undefined
                 ? Number(selectedItem.grazingAngleMrad)
