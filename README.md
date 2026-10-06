@@ -43,7 +43,7 @@ An interactive web app for designing synchrotron beamline layouts, with live ray
 
 ## Running it locally
 
-Requires [Node.js](https://nodejs.org/) 18 or newer.
+Requires [Node.js](https://nodejs.org/) 22.22+ or 24.15+ (the tests use jsdom, which needs it); CI uses Node 24.
 
 ```bash
 git clone https://github.com/rachapp/beamline_layout_builder.git
