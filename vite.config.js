@@ -74,7 +74,7 @@ export default defineConfig({
           }
         });
       },
-      // When building for production (e.g. gh-pages), copy templates/ into dist/ and create manifest.json.
+      // When building for production (GitHub Pages), copy templates/ into dist/ and create manifest.json.
       // templates/ is the only copy of the CSV templates kept in the repository.
       closeBundle() {
         try {
