@@ -1,8 +1,8 @@
 import React from 'react';
-import { TYPES, PX_PER_MM_V } from '../constants';
+import { TYPES, PX_PER_MM_V, isMirrorType } from '../constants';
 import { getDefaultColors } from '../utils';
 
-export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAnchorX, dcmAnchorY: propDcmAnchorY, viewType, tracePoints, theme, isDarkMode }) => {
+const OpticalComponentView = ({ item, itemW: propItemW, dcmAnchorX: propDcmAnchorX, dcmAnchorY: propDcmAnchorY, viewType, tracePoints, theme, isDarkMode }) => {
   const type = item.type;
   const planeCoord = viewType === 'SIDE' ? 'y' : 'z';
   
@@ -231,14 +231,10 @@ export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAn
       );
     }
 
-    const conf = TYPES[type];
-    const housingH = viewType === 'SIDE' ? (item.dimY ?? conf.height) : (item.dimZ ?? conf.height);
     const centerY = localAnchorY;
-    const itemW = propItemW ?? (item.dimX ?? conf.width);
 
     const parsedOffset = parseFloat(item.exitOffset);
     const offset_mm = !isNaN(parsedOffset) ? (parsedOffset > 0 && parsedOffset <= 1.0 ? parsedOffset * 100 : parsedOffset) : 25;
-    const offset = offset_mm;
     const D_px = offset_mm * PX_PER_MM_V;
     const parsedTheta = parseFloat(item.braggAngle);
     const theta_deg = !isNaN(parsedTheta) ? parsedTheta : 45;
@@ -312,7 +308,7 @@ export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAn
     );
   }
   
-  if (['VFM', 'HFM'].includes(type)) {
+  if (isMirrorType(type)) {
     const isInactive = (type === 'VFM' && viewType === 'TOP') || (type === 'HFM' && viewType === 'SIDE');
     if (isInactive) {
       return (
@@ -380,3 +376,29 @@ export const OpticalComponent = ({ item, itemW: propItemW, dcmAnchorX: propDcmAn
   }
   return null;
 };
+
+const shallowEqual = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  if (keysA.length !== Object.keys(b).length) return false;
+  return keysA.every(k => a[k] === b[k]);
+};
+
+// Trace points only affect how a DCM draws its crystals, so compare just the points for this item.
+const ownTracePoints = (tracePoints, id) => (tracePoints || []).filter(p => p.parentId === id);
+const sameTracePoints = (a, b) => a.length === b.length && a.every((p, i) => shallowEqual(p, b[i]));
+
+/**
+ * The physics engine rebuilds every item object whenever anything changes, so compare items by
+ * value. This way only the component that actually changed re-renders while you drag.
+ */
+const arePropsEqual = (prev, next) => {
+  if (prev.itemW !== next.itemW || prev.dcmAnchorX !== next.dcmAnchorX || prev.dcmAnchorY !== next.dcmAnchorY) return false;
+  if (prev.viewType !== next.viewType || prev.theme !== next.theme || prev.isDarkMode !== next.isDarkMode) return false;
+  if (!shallowEqual(prev.item, next.item)) return false;
+  if (prev.tracePoints === next.tracePoints) return true;
+  return sameTracePoints(ownTracePoints(prev.tracePoints, prev.item.id), ownTracePoints(next.tracePoints, next.item.id));
+};
+
+export const OpticalComponent = React.memo(OpticalComponentView, arePropsEqual);

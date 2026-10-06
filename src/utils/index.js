@@ -1,8 +1,8 @@
-import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE } from '../constants/index.js';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE, BEAM_AXIS_PX, FLOOR_PX, isRangeType, isDcmType, isMirrorType } from '../constants/index.js';
 
 export const mapTemplateToItems = (templateData) => {
   return templateData.map((item, idx) => {
-    const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+    const isRange = isRangeType(item.type);
     const dist = parseFloat(item.distance) || 0;
     
     let x = ORIGIN_X + dist * PX_PER_M;
@@ -34,12 +34,12 @@ export const mapTemplateToItems = (templateData) => {
     const physicalLength = sourceProps.length ?? (item.length !== undefined ? parseFloat(item.length) : itemConfig.defaultLength);
     let dimX = sourceProps.dimX ?? (physicalLength !== undefined ? (physicalLength * PX_PER_M) : (item.dimX ?? itemConfig.width));
     
-    const h = parseFloat(item.height) ?? (isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
-    const o = parseFloat(item.offset) ?? 0;
+    const h = numOr(item.height, isRange ? (TYPES[item.type].height / PX_PER_M) : 0);
+    const o = numOr(item.offset, 0);
     
     const isChamber = item.type === 'CHAMBER';
-    const y = isChamber ? 150 - (h * PX_PER_M) : ((isRange) ? 200 - (h * PX_PER_M) / 2 : 150 - (h * PX_PER_MM_V));
-    const z = isChamber ? 150 + (o * PX_PER_MM_V) : ((isRange) ? 150 : 150 + (o * PX_PER_MM_V));
+    const y = isChamber ? BEAM_AXIS_PX - (h * PX_PER_M) : ((isRange) ? FLOOR_PX - (h * PX_PER_M) / 2 : BEAM_AXIS_PX - (h * PX_PER_MM_V));
+    const z = isChamber ? BEAM_AXIS_PX + (o * PX_PER_MM_V) : ((isRange) ? BEAM_AXIS_PX : BEAM_AXIS_PX + (o * PX_PER_MM_V));
     
     let dimY = isRange ? (h * PX_PER_M) : undefined;
     let dimZ = isRange ? (h * PX_PER_M) : undefined;
@@ -68,14 +68,14 @@ export const mapTemplateToItems = (templateData) => {
     } else if (isSource) {
       end = isNaN(end) ? dist : end;
       start = isNaN(start) ? parseFloat((end - physicalLength).toFixed(3)) : start;
-    } else if (['VDCM', 'HDCM'].includes(item.type)) {
+    } else if (isDcmType(item.type)) {
       const chLen = item.chamberLength !== undefined ? parseFloat(item.chamberLength) : (item.housingLength !== undefined ? parseFloat(item.housingLength) : 1.2);
       dimX = chLen * PX_PER_M;
       if (item.housingHeight !== undefined) {
         dimY = parseFloat(item.housingHeight) * PX_PER_M;
         dimZ = parseFloat(item.housingHeight) * PX_PER_M;
       }
-    } else if (['VFM', 'HFM'].includes(item.type)) {
+    } else if (isMirrorType(item.type)) {
       const substrateThickness = item.substrateThickness !== undefined ? parseFloat(item.substrateThickness) : 0.3;
       const faceHeight = item.faceHeight !== undefined ? parseFloat(item.faceHeight) : 1.0;
       item.substrateThickness = substrateThickness;
@@ -149,4 +149,13 @@ export const getDefaultColors = (type, isDarkMode, theme) => {
       case 'ANCHOR': return { primary: '#3b82f6', secondary: '#60a5fa' };
       default: return { primary: theme.compBorder, secondary: theme.compBg };
     }
+};
+
+/**
+ * Parses a number, falling back when the value is missing or not numeric.
+ * Use this instead of `parseFloat(x) ?? fallback`, which never falls back because parseFloat returns NaN, not null.
+ */
+export const numOr = (value, fallback) => {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : fallback;
 };

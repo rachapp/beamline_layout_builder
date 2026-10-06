@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Settings2, Trash2, Plus, Layers, Grid, Magnet, Maximize, Ruler, Tag, Sliders, Type, Table, Sparkles, FileDown, FileUp, ChevronLeft, RefreshCw } from 'lucide-react';
+import { Settings2, Trash2, Plus, Grid, Magnet, Maximize, Ruler, Tag, Sliders, Type, Table, Sparkles, FileDown, FileUp, ChevronLeft, RefreshCw } from 'lucide-react';
 import { TYPES, templates } from '../constants';
 
 export const Sidebar = ({ 
@@ -29,28 +29,17 @@ export const Sidebar = ({
   isTableOpen,
   setIsTableOpen,
   setIsCadExportOpen,
-  items = [],
   templateList = [],
   refreshTemplates,
   loadedFileName = '',
-  setLoadedFileName,
   onExportCsv,
-  onImportCsv
+  onImportCsvFile
 }) => {
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result;
-      if (text && onImportCsv) {
-        onImportCsv(text);
-        if (setLoadedFileName) setLoadedFileName(file.name);
-      }
-    };
-    reader.readAsText(file);
+    if (file && onImportCsvFile) onImportCsvFile(file);
     e.target.value = '';
   };
   return (

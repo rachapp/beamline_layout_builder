@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Table, Plus, Trash2, Copy, FileDown, FileUp, Maximize2, Minimize2, X, 
-  AlertTriangle, CheckCircle2, Search, ArrowRight, Layers, Eye,
-  Sparkles, Check, ChevronDown, ChevronUp, Sliders, Box, GripHorizontal,
-  Lock, Crosshair
+  AlertTriangle, CheckCircle2, Search, ArrowRight, Eye,
+  Sparkles, GripHorizontal, Lock, Crosshair
 } from 'lucide-react';
-import { TYPES, PX_PER_M, PX_PER_MM_V } from '../constants';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, BEAM_AXIS_PX, FLOOR_PX, isRangeType, isAnchorType, canEditOffset, canEditElevation, isWallType } from '../constants';
 import { computeConstructionSchedule, downloadCsv, getItemBoundsM, calculateUpdatedBounds, setItemMiscParam } from '../utils/constructionUtils';
 import { BufferedNumberInput, BufferedTextInput } from './BufferedNumberInput';
 
@@ -13,6 +12,7 @@ export const TableView = ({
   items = [],
   setItems,
   selectedId,
+  selectedIds = [],
   setSelectedId,
   canvasLength = 50,
   theme,
@@ -22,7 +22,7 @@ export const TableView = ({
   setViewMode,
   onOpenCadExport,
   onFocusItem,
-  onImportCsv,
+  onImportCsvFile,
   onExportCsv
 }) => {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL', 'OPTICAL', 'ENCLOSURE'
@@ -62,7 +62,7 @@ export const TableView = ({
   const handleToggleAllFootprints = () => {
     const nextVal = !allFootprintsVisible;
     setItems(prev => prev.map(item => {
-      if (['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return item;
+      if ((isRangeType(item.type) || isAnchorType(item.type))) return item;
       return { ...item, showFootprint: nextVal };
     }));
   };
@@ -75,7 +75,7 @@ export const TableView = ({
   const handleToggleAllLabels = () => {
     const nextVal = !allLabelsVisible;
     setItems(prev => prev.map(item => {
-      if (['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) return item;
+      if (isAnchorType(item.type)) return item;
       return { ...item, showLabel: nextVal };
     }));
   };
@@ -175,30 +175,30 @@ export const TableView = ({
         if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_SIDE', 'WALL', 'HUTCH', 'CHAMBER'].includes(item.type)) return item;
         const h = parseFloat(value) || 0;
         updated.height = h;
-        if (['WALL', 'HUTCH'].includes(item.type)) {
+        if (isWallType(item.type)) {
           updated.wallHeight = h;
           updated.dimY = h * PX_PER_M;
-          updated.y = 200 - (h * PX_PER_M) / 2;
+          updated.y = FLOOR_PX - (h * PX_PER_M) / 2;
         } else if (item.type === 'CHAMBER') {
           updated.dimY = h * PX_PER_M;
           updated.dimZ = h * PX_PER_M;
-          updated.y = 150 - h * PX_PER_M;
+          updated.y = BEAM_AXIS_PX - h * PX_PER_M;
         } else {
-          updated.y = 150 - h * PX_PER_MM_V;
-          if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
+          updated.y = BEAM_AXIS_PX - h * PX_PER_MM_V;
+          if (item.type === 'DETECTOR' || isAnchorType(item.type)) updated.stayInPath = false;
         }
       } else if (field === 'offset') {
-        if (!['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(item.type)) return item;
+        if (!canEditOffset(item.type)) return item;
         const o = parseFloat(value) || 0;
         updated.offset = o;
-        updated.z = 150 + o * PX_PER_MM_V;
-        if (item.type === 'DETECTOR' || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) updated.stayInPath = false;
+        updated.z = BEAM_AXIS_PX + o * PX_PER_MM_V;
+        if (item.type === 'DETECTOR' || isAnchorType(item.type)) updated.stayInPath = false;
       } else if (field === 'type') {
         updated.type = value;
         const conf = TYPES[value];
         if (conf) {
           if (!updated.customName) updated.customName = conf.name;
-          if (['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(value)) {
+          if (isAnchorType(value)) {
             updated.length = 0;
             updated.physicalLength = 0;
             updated.chamberLength = 0;
@@ -215,25 +215,21 @@ export const TableView = ({
     }));
   };
 
-  // Quick duplicate component
+  // Quick duplicate component, placed 1 m downstream
   const handleDuplicate = (row) => {
-    const orig = row.item;
+    const newId = Date.now();
     const newDist = parseFloat((row.dist + 1.0).toFixed(2));
-    const newItem = {
-      ...orig,
-      id: Date.now(),
-      customName: `${orig.customName || orig.type} (Copy)`,
-      distance: newDist,
-      x: 160 + newDist * PX_PER_M
-    };
-    if (['WALL', 'HUTCH', 'CHAMBER'].includes(orig.type)) {
-      const len = row.length;
-      newItem.start = parseFloat((newDist - len / 2).toFixed(2));
-      newItem.end = parseFloat((newDist + len / 2).toFixed(2));
-    }
-    setItems(prev => [...prev, newItem].sort((a, b) => (a.distance || 0) - (b.distance || 0)));
-    setSelectedId(newItem.id);
-    if (onFocusItem) onFocusItem(newItem.id);
+    setItems(prev => {
+      // Copy the stored item (row.item is the ray-traced copy with computed fields).
+      const orig = prev.find(i => i.id === row.id);
+      if (!orig) return prev;
+      // Moving through calculateUpdatedBounds shifts the footprint box with the copy.
+      const moved = calculateUpdatedBounds(orig, 'distance', newDist, 'ADJUST_LENGTH');
+      const copy = { ...moved, id: newId, customName: `${orig.customName || orig.type} (Copy)` };
+      return [...prev, copy].sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    });
+    setSelectedId(newId);
+    if (onFocusItem) onFocusItem(newId);
   };
 
   // Delete component
@@ -248,16 +244,16 @@ export const TableView = ({
     const conf = TYPES[newCompType] || TYPES.SLIT;
     const len = parseFloat(newCompLength) || conf.defaultLength || (conf.width / PX_PER_M);
     const dist = parseFloat(newCompDist) || 10;
-    const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(newCompType);
+    const isRange = isRangeType(newCompType);
 
     const newItem = {
       id: Date.now(),
       type: newCompType,
       customName: newCompName.trim() || conf.name,
       distance: dist,
-      x: 160 + dist * PX_PER_M,
-      y: 150,
-      z: 150,
+      x: ORIGIN_X + dist * PX_PER_M,
+      y: BEAM_AXIS_PX,
+      z: BEAM_AXIS_PX,
       height: 0,
       offset: 0,
       length: len,
@@ -433,14 +429,7 @@ export const TableView = ({
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                  if (evt.target?.result && onImportCsv) {
-                    onImportCsv(evt.target.result);
-                  }
-                };
-                reader.readAsText(file);
+                if (file && onImportCsvFile) onImportCsvFile(file);
                 e.target.value = '';
               }}
             />
@@ -729,7 +718,7 @@ export const TableView = ({
               </tr>
             ) : (
               filteredRows.map((row) => {
-                const isSelected = selectedId === row.id;
+                const isSelected = selectedIds.includes(row.id);
 
                 return (
                   <tr
@@ -751,14 +740,14 @@ export const TableView = ({
 
                     {/* Footprint Box Checkbox Toggle */}
                     <td className="py-2 px-2 text-center">
-                      {!['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
+                      {!(isRangeType(row.type) || isAnchorType(row.type)) ? (
                         <input 
                           type="checkbox" 
                           checked={Boolean(row.item.showFootprint)} 
                           onClick={(e) => e.stopPropagation()} 
                           onChange={(e) => handleCellChange(row.id, 'showFootprint', e.target.checked)} 
                           className="w-3.5 h-3.5 rounded cursor-pointer text-blue-600" 
-                          title={Boolean(row.item.showFootprint) ? "Hide dashed footprint box on canvas" : "Show dashed footprint box on canvas"} 
+                          title={row.item.showFootprint ? "Hide dashed footprint box on canvas" : "Show dashed footprint box on canvas"} 
                         />
                       ) : (
                         <span className="text-[9px] opacity-30 font-mono">-</span>
@@ -767,7 +756,7 @@ export const TableView = ({
 
                     {/* Show Label Checkbox Toggle */}
                     <td className="py-2 px-2 text-center">
-                      {!['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
+                      {!isAnchorType(row.type) ? (
                         <input 
                           type="checkbox" 
                           checked={row.item.showLabel !== false} 
@@ -846,7 +835,7 @@ export const TableView = ({
 
                     {/* Physical Length L (m) Input */}
                     <td className="py-2 px-3 text-right whitespace-nowrap">
-                      {['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(row.type) ? (
+                      {isAnchorType(row.type) ? (
                         <span className="text-[10px] font-mono opacity-60">0.000</span>
                       ) : !['VDCM', 'HDCM', 'SCREEN', 'SLIT', 'XBPM'].includes(row.type) ? (
                         <div className="inline-flex items-center gap-1 justify-end">
@@ -934,23 +923,24 @@ export const TableView = ({
                     {/* Elevation Height Y (mm) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
-                        if (['WALL', 'HUTCH'].includes(row.type)) {
+                        if (isWallType(row.type)) {
                           return <span className="text-center font-mono opacity-50 block">-</span>;
                         }
+                        const elevationEditable = canEditElevation(row.type);
                         const valMm = row.heightMm !== null && row.heightMm !== undefined ? Number(row.heightMm) : (row.height !== undefined ? Number(row.height) : 0);
                         return (
                           <BufferedNumberInput
                             step={0.1}
                             value={valMm}
-                            disabled={!canEditElevation}
+                            disabled={!elevationEditable}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(val) => handleCellChange(row.id, 'height', val)}
                             className={`w-16 text-right py-0.5 px-1 font-mono font-bold border rounded outline-none ${
-                              !canEditElevation 
+                              !elevationEditable 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditElevation ? "Elevation auto-calculated from beam ray trace" : "Elevation Height Y (mm)"}
+                            title={!elevationEditable ? "Elevation auto-calculated from beam ray trace" : "Elevation Height Y (mm)"}
                           />
                         );
                       })()}
@@ -959,24 +949,24 @@ export const TableView = ({
                     {/* Lateral Offset Z (mm) Input */}
                     <td className="py-2 px-3 text-right">
                       {(() => {
-                        if (['WALL', 'HUTCH'].includes(row.type)) {
+                        if (isWallType(row.type)) {
                           return <span className="text-center font-mono opacity-50 block">-</span>;
                         }
-                        const canEditOffset = ['SOURCE', 'DETECTOR', 'ANCHOR', 'ANCHOR_TOP'].includes(row.type);
+                        const offsetEditable = canEditOffset(row.type);
                         const valMm = row.offsetMm !== null && row.offsetMm !== undefined ? Number(row.offsetMm) : (row.offset !== undefined ? Number(row.offset) : 0);
                         return (
                           <BufferedNumberInput
                             step={0.1}
                             value={valMm}
-                            disabled={!canEditOffset}
+                            disabled={!offsetEditable}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(val) => handleCellChange(row.id, 'offset', val)}
                             className={`w-16 text-right py-0.5 px-1 font-mono font-bold border rounded outline-none ${
-                              !canEditOffset 
+                              !offsetEditable 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-200/50 dark:bg-slate-800/60 text-gray-500 border-transparent' 
                                 : 'border-transparent hover:border-gray-400/40 bg-transparent'
                             }`}
-                            title={!canEditOffset ? "Lateral offset auto-calculated from beam ray trace" : "Lateral Offset Z (mm)"}
+                            title={!offsetEditable ? "Lateral offset auto-calculated from beam ray trace" : "Lateral Offset Z (mm)"}
                           />
                         );
                       })()}

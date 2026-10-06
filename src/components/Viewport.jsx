@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, Grid, Magnet, Ruler } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { OpticalComponent } from './OpticalComponent';
-import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE } from '../constants';
-import { getOpticPhysicalLengthM, getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
-import { getItemVisualHeight } from '../utils';
+import { TYPES, ORIGIN_X, PX_PER_M, PX_PER_MM_V, GRID_SIZE, BEAM_AXIS_PX, FLOOR_PX, isRangeType, isSplitterType, isAnchorType } from '../constants';
+import { getItemBoundsM, calculateUpdatedBounds } from '../utils/constructionUtils';
+import { getItemVisualHeight, numOr } from '../utils';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, tracePointsBranch = [], theme, 
   draggingInfo, placingType, pan, zoom, showGrid, showRuler, showAnnotations = true, canvasWidth, 
-  isDarkMode, computedItems, selectedId, setSelectedId, editingLabel, rayColor, 
+  isDarkMode, computedItems, selectedIds = [], setSelectedId, editingLabel, rayColor, 
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
   handleResizePointerDown, handleLabelPointerDown, handleLabelDoubleClick,
@@ -18,7 +18,6 @@ export const Viewport = ({
   const [editingAnnotation, setEditingAnnotation] = useState(null); // { id, text, posX, badgeY }
   const lastAnnotClickRef = useRef({});
   const lastLabelClickRef = useRef({});
-  const lastCompClickRef = useRef({});
   const annotOpenTimeRef = useRef(0);
   const labelOpenTimeRef = useRef(0);
   const hasSelectedAnnotRef = useRef(false);
@@ -78,7 +77,7 @@ export const Viewport = ({
     if (!showAnnotations) return [];
     const candidateItems = (computedItems || []).filter(
       (item) => !item.isBranchHidden &&
-                !['WALL', 'HUTCH', 'CHAMBER', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) &&
+                !(isRangeType(item.type) || isAnchorType(item.type)) &&
                 item.detectorType !== 'Virtual Anchor' &&
                 !item.isInvisible &&
                 !(item.type === 'ANCHOR_SIDE' && viewType === 'TOP') &&
@@ -86,8 +85,8 @@ export const Viewport = ({
     );
 
     const sortedAnnotations = candidateItems.map((item) => {
-      const isSelected = selectedId === item.id;
-      const elemY = viewType === 'SIDE' ? (item.y ?? 150) : (item.z ?? 150);
+      const isSelected = selectedIds.includes(item.id);
+      const elemY = viewType === 'SIDE' ? (item.y ?? BEAM_AXIS_PX) : (item.z ?? BEAM_AXIS_PX);
       const itemH = getItemVisualHeight(item, viewType);
       const targetY = elemY > 65 ? (elemY - itemH / 2) : (elemY + itemH / 2);
 
@@ -141,7 +140,7 @@ export const Viewport = ({
 
       return { ...annot, level: assignedLevel, badgeBottom, badgeY };
     });
-  }, [showAnnotations, computedItems, selectedId, viewType, canvasSettings]);
+  }, [showAnnotations, computedItems, selectedIds, viewType, canvasSettings]);
 
   const isPanning = draggingInfo?.type === 'pan' && draggingInfo?.view === viewType;
   const isWheelingRef = useRef(false);
@@ -197,23 +196,23 @@ export const Viewport = ({
   // Helper to interpolate coordinate at x along a trace points array
   const getRayCoordAtX = (pts, x, coord) => {
     if (!pts || pts.length === 0) return null;
-    if (pts.length === 1) return pts[0][coord] ?? 150;
-    if (x <= pts[0].x) return pts[0][coord] ?? 150;
+    if (pts.length === 1) return pts[0][coord] ?? BEAM_AXIS_PX;
+    if (x <= pts[0].x) return pts[0][coord] ?? BEAM_AXIS_PX;
     for (let i = 0; i < pts.length - 1; i++) {
       const p1 = pts[i];
       const p2 = pts[i + 1];
       if (x >= p1.x && x <= p2.x) {
-        if (p2.x === p1.x) return p1[coord] ?? 150;
-        const v1 = p1[coord] ?? 150;
-        const v2 = p2[coord] ?? 150;
+        if (p2.x === p1.x) return p1[coord] ?? BEAM_AXIS_PX;
+        const v1 = p1[coord] ?? BEAM_AXIS_PX;
+        const v2 = p2[coord] ?? BEAM_AXIS_PX;
         return v1 + (v2 - v1) * ((x - p1.x) / (p2.x - p1.x));
       }
     }
     const p1 = pts[pts.length - 2];
     const p2 = pts[pts.length - 1];
-    if (p2.x === p1.x) return p2[coord] ?? 150;
-    const v1 = p1[coord] ?? 150;
-    const v2 = p2[coord] ?? 150;
+    if (p2.x === p1.x) return p2[coord] ?? BEAM_AXIS_PX;
+    const v1 = p1[coord] ?? BEAM_AXIS_PX;
+    const v2 = p2[coord] ?? BEAM_AXIS_PX;
     return v1 + (v2 - v1) * ((x - p1.x) / (p2.x - p1.x));
   };
 
@@ -223,15 +222,15 @@ export const Viewport = ({
       const p1 = pts[i];
       const p2 = pts[i + 1];
       if (x >= p1.x && x <= p2.x) {
-        const v1 = p1[coord] ?? 150;
-        const v2 = p2[coord] ?? 150;
+        const v1 = p1[coord] ?? BEAM_AXIS_PX;
+        const v2 = p2[coord] ?? BEAM_AXIS_PX;
         return Math.atan2(v2 - v1, p2.x - p1.x);
       }
     }
     const p1 = pts[pts.length - 2];
     const p2 = pts[pts.length - 1];
-    const v1 = p1[coord] ?? 150;
-    const v2 = p2[coord] ?? 150;
+    const v1 = p1[coord] ?? BEAM_AXIS_PX;
+    const v2 = p2[coord] ?? BEAM_AXIS_PX;
     return Math.atan2(v2 - v1, p2.x - p1.x);
   };
 
@@ -240,7 +239,7 @@ export const Viewport = ({
   let activeGhostSnappedY = ghostPos?.y;
   let activeGhostBranchSlope = 0;
 
-  if (placingType && ghostPos?.view === viewType && !['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
+  if (placingType && ghostPos?.view === viewType && !isRangeType(placingType)) {
     const ghostDist = parseFloat(((ghostPos.x - ORIGIN_X) / PX_PER_M).toFixed(1));
     const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;
     const hasSplitterUpstream = (computedItems || []).some(
@@ -401,8 +400,8 @@ export const Viewport = ({
 
             {viewType === 'SIDE' && (
               <g>
-                <line x1="-48000" y1="200" x2="48000" y2="200" stroke={theme.inactiveBorder} strokeWidth="2" />
-                <rect x="-48000" y="200" width="96000" height="12" fill={`url(#floor-hatch-${viewType})`} />
+                <line x1="-48000" y1={FLOOR_PX} x2="48000" y2={FLOOR_PX} stroke={theme.inactiveBorder} strokeWidth="2" />
+                <rect x="-48000" y={FLOOR_PX} width="96000" height="12" fill={`url(#floor-hatch-${viewType})`} />
               </g>
             )}
 
@@ -482,8 +481,8 @@ export const Viewport = ({
                   vTicks.push(
                     <line
                       key="v-ruler-zero-guide"
-                      x1={vRulerX} y1="150"
-                      x2={ORIGIN_X - 10} y2="150"
+                      x1={vRulerX} y1={BEAM_AXIS_PX}
+                      x2={ORIGIN_X - 10} y2={BEAM_AXIS_PX}
                       stroke={isDarkMode ? '#1e3a8a' : '#bfdbfe'}
                       strokeWidth="1"
                       strokeDasharray="2,3"
@@ -495,9 +494,9 @@ export const Viewport = ({
                   // Minor ticks every 25 mm, major ticks and labels every 50 mm (1 unit grid = 20 px)
                   const mmValues = [225, 200, 175, 150, 125, 100, 75, 50, 25, 0, -25, -50, -75, -100, -125, -150, -175, -200, -225];
                   mmValues.forEach((val) => {
-                    // In Side View: +Y (higher elevation) is smaller y. 0 mm is at 150 px.
-                    // In Top View: +Z (outboard) is larger z. 0 mm is at 150 px.
-                    const yPos = viewType === 'SIDE' ? 150 - val * PX_PER_MM_V : 150 + val * PX_PER_MM_V;
+                    // In Side View: +Y (higher elevation) is smaller y. 0 mm is on the beam axis.
+                    // In Top View: +Z (outboard) is larger z. 0 mm is on the beam axis.
+                    const yPos = viewType === 'SIDE' ? BEAM_AXIS_PX - val * PX_PER_MM_V : BEAM_AXIS_PX + val * PX_PER_MM_V;
                     const isMajor = val % 50 === 0;
 
                     vTicks.push(
@@ -540,7 +539,7 @@ export const Viewport = ({
               <g className="annotations-lines-layer">
                 {layoutItems.map((annot) => {
                   const { item, isSelected, targetY, posX, badgeBottom, badgeY } = annot;
-                  if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
+                  if (!item || isAnchorType(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
                   if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
                   if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
                   const strokeColor = isSelected ? '#3b82f6' : (isDarkMode ? '#475569' : '#cbd5e1');
@@ -663,7 +662,7 @@ export const Viewport = ({
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 45 }}>
               {layoutItems.map((annot) => {
                 const { item, isSelected, posX, labelText, badgeWidth, badgeHeight, badgeY } = annot;
-                if (!item || ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
+                if (!item || isAnchorType(item.type) || item.detectorType === 'Virtual Anchor' || item.isInvisible) return null;
                 if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
                 if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
                 if (isItemDimmedByBranch(item)) return null;
@@ -788,22 +787,22 @@ export const Viewport = ({
               if (item.type === 'ANCHOR_SIDE' && viewType === 'TOP') return null;
               if (item.type === 'ANCHOR_TOP' && viewType === 'SIDE') return null;
               const conf = TYPES[item.type] || { width: 8, height: 8 };
-              const isSelected = selectedId === item.id;
+              const isSelected = selectedIds.includes(item.id);
               const isDraggingThis = draggingInfo?.id === item.id && draggingInfo.type === 'component';
               const isEditing = editingLabel?.id === item.id && (!editingLabel.view || editingLabel.view === viewType);
               
               const isGratingActive = item.type === 'GRATING' && ((viewType === 'SIDE' && (item.orientation || 'Vertical') === 'Vertical') || (viewType === 'TOP' && item.orientation === 'Horizontal'));
               const isSimpleMirrorActive = (item.type === 'VFM' && viewType === 'SIDE') || (item.type === 'HFM' && viewType === 'TOP') || isGratingActive;
               
-              const isRange = ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type);
+              const isRange = isRangeType(item.type);
               const isDCM = item.type === 'VDCM' || item.type === 'HDCM';
               const isSource = item.type === 'SOURCE';
 
               const bounds = getItemBoundsM(item);
               const physLengthM = bounds.physLen;
 
-              const isAnchorType = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type);
-              const isVirtualAnchor = isAnchorType || (item.type === 'DETECTOR' && (item.detectorType === 'Virtual Anchor' || item.isInvisible));
+              const isAnchorItem = isAnchorType(item.type);
+              const isVirtualAnchor = isAnchorItem || (item.type === 'DETECTOR' && (item.detectorType === 'Virtual Anchor' || item.isInvisible));
 
               // Visual width of component graphic:
               // Physical length visualizes the optics itself on the canvas!
@@ -821,7 +820,7 @@ export const Viewport = ({
 
               // Chamber footprint box envelope (dashed bounding box)
               const globalShowFootprints = canvasSettings?.showFootprintBoxes !== false;
-              const showFootprintBox = !isAnchorType && !isRange && !isVirtualAnchor && Boolean(item.showFootprint) && globalShowFootprints;
+              const showFootprintBox = !isAnchorItem && !isRange && !isVirtualAnchor && Boolean(item.showFootprint) && globalShowFootprints;
               const showFootprintText = item.showFootprintText !== false && canvasSettings?.showFootprintText !== false;
               const footprintW = Math.max(4, bounds.len * PX_PER_M);
               const footprintH = isDCM ? itemH : Math.max(itemH + 14, 28);
@@ -848,28 +847,28 @@ export const Viewport = ({
                       const p = activeTrace[pIdx];
                       const prev = activeTrace[pIdx - 1];
                       const next = activeTrace[pIdx + 1];
-                      const py = p[planeCoord] ?? 150;
-                      const prevy = prev[planeCoord] ?? 150;
-                      const nexty = next[planeCoord] ?? 150;
+                      const py = p[planeCoord] ?? BEAM_AXIS_PX;
+                      const prevy = prev[planeCoord] ?? BEAM_AXIS_PX;
+                      const nexty = next[planeCoord] ?? BEAM_AXIS_PX;
                       const angleIn = Math.atan2(py - prevy, p.x - prev.x);
                       const angleOut = Math.atan2(nexty - py, next.x - p.x);
                       rotation = (angleIn + angleOut) / 2;
                       if (angleIn < angleOut) rotation += Math.PI;
                       if (item.type === 'GRATING') {
-                          rotation -= (parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
+                          rotation -= numOr(item.tiltAngle, 0) * Math.PI / 180;
                       }
                   } else if (pIdx > 0) {
                       const p = activeTrace[pIdx];
                       const prev = activeTrace[pIdx - 1];
-                      const py = p[planeCoord] ?? 150;
-                      const prevy = prev[planeCoord] ?? 150;
+                      const py = p[planeCoord] ?? BEAM_AXIS_PX;
+                      const prevy = prev[planeCoord] ?? BEAM_AXIS_PX;
                       rotation = Math.atan2(py - prevy, p.x - prev.x);
                   } else if (item.type === 'GRATING' && isGratingActive) {
-                      rotation = -(parseFloat(item.tiltAngle) ?? 0) * Math.PI / 180;
+                      rotation = -numOr(item.tiltAngle, 0) * Math.PI / 180;
                   } else if (isDiffBranch) {
                       rotation = getRaySlopeAtX(tracePointsBranch, item.x, planeCoord);
                   }
-              } else if (isDiffBranch && !['WALL', 'HUTCH', 'CHAMBER', 'VSPLIT', 'HSPLIT', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(item.type)) {
+              } else if (isDiffBranch && !(isRangeType(item.type) || isSplitterType(item.type) || isAnchorType(item.type))) {
                   // All optics on diffracted branch rotate along the branch slope as the new 0° axis
                   rotation = getRaySlopeAtX(tracePointsBranch, item.x, planeCoord);
               }
@@ -929,7 +928,7 @@ export const Viewport = ({
               const resizeHandlePos = viewType === 'SIDE' ? { right: '-6px', top: '-6px', cursor: 'nesw-resize' } : { right: '-6px', bottom: '-6px', cursor: 'nwse-resize' };
               
               const globalShowLabels = canvasSettings?.showLabels !== false;
-              const labelVisible = !isAnchorType && (isEditing || (globalShowLabels && (item.showLabel !== false)));
+              const labelVisible = !isAnchorItem && (isEditing || (globalShowLabels && (item.showLabel !== false)));
 
               const isDimmed = isItemDimmedByBranch(item);
 
@@ -1034,7 +1033,7 @@ export const Viewport = ({
                       <OpticalComponent item={item} itemW={itemW} dcmAnchorX={dcmAnchorX} dcmAnchorY={dcmAnchorY} viewType={viewType} tracePoints={tracePoints} theme={theme} isDarkMode={isDarkMode} />
                     </div>
                     
-                    {isSelected && ['WALL', 'HUTCH', 'CHAMBER'].includes(item.type) && (
+                    {isSelected && isRangeType(item.type) && (
                       <div 
                         className="absolute w-3 h-3 bg-blue-500 border border-white z-[60]"
                         style={resizeHandlePos}
@@ -1199,7 +1198,7 @@ export const Viewport = ({
                    transformOffset = 'translate(-100%, -50%)';
                }
 
-               const isAnchorPlacing = ['ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType);
+               const isAnchorPlacing = isAnchorType(placingType);
                const itemW = isAnchorPlacing ? 8 : mockItem.dimX;
                const itemH = isAnchorPlacing ? 8 : (placingType === 'XBPM' ? itemW : getItemVisualHeight(mockItem, viewType)); 
                
@@ -1207,16 +1206,16 @@ export const Viewport = ({
                const ghostSnappedX = ORIGIN_X + ghostDist * PX_PER_M;
 
                 let ghostY = activeGhostSnappedY !== undefined && activeGhostSnappedY !== null ? activeGhostSnappedY : ghostPos.y;
-                if (['WALL', 'HUTCH', 'CHAMBER'].includes(placingType)) {
+                if (isRangeType(placingType)) {
                    if (placingType === 'CHAMBER') {
-                     ghostY = 150; // Always snap to beam path
+                     ghostY = BEAM_AXIS_PX; // Always snap to beam path
                    } else if (viewType === 'SIDE') {
-                     ghostY = 200 - itemH / 2; // Floor snap
+                     ghostY = FLOOR_PX - itemH / 2; // Floor snap
                    }
                 }
 
                 let rotation = 0;
-                if (activeGhostBranch === 'diffracted' && !['WALL', 'HUTCH', 'CHAMBER', 'VSPLIT', 'HSPLIT', 'ANCHOR', 'ANCHOR_SIDE', 'ANCHOR_TOP'].includes(placingType)) {
+                if (activeGhostBranch === 'diffracted' && !(isRangeType(placingType) || isSplitterType(placingType) || isAnchorType(placingType))) {
                     rotation = activeGhostBranchSlope;
                     if (placingType === 'GRATING' && isGratingActive) {
                         rotation -= 45 * Math.PI / 180;

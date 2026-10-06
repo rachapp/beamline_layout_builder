@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
-  FileCode, Download, Copy, Check, X, GripHorizontal, Eye, Sliders, Layers, Sparkles 
+  Download, Copy, Check, GripHorizontal, Sparkles 
 } from 'lucide-react';
 import { generateCadSvg, downloadCadSvg } from '../utils/constructionUtils';
 

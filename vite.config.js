@@ -74,21 +74,16 @@ export default defineConfig({
           }
         });
       },
-      // When building for production (e.g. gh-pages), copy templates/ and create manifest.json
+      // When building for production (e.g. gh-pages), copy templates/ into dist/ and create manifest.json.
+      // templates/ is the only copy of the CSV templates kept in the repository.
       closeBundle() {
         try {
           const templatesDir = path.resolve(__dirname, 'templates');
           const distTemplatesDir = path.resolve(__dirname, 'dist', 'templates');
-          const publicTemplatesDir = path.resolve(__dirname, 'public', 'templates');
           if (fs.existsSync(templatesDir)) {
             fs.rmSync(distTemplatesDir, { recursive: true, force: true });
-            fs.rmSync(publicTemplatesDir, { recursive: true, force: true });
-
             fs.mkdirSync(distTemplatesDir, { recursive: true });
             fs.cpSync(templatesDir, distTemplatesDir, { recursive: true });
-
-            fs.mkdirSync(publicTemplatesDir, { recursive: true });
-            fs.cpSync(templatesDir, publicTemplatesDir, { recursive: true });
 
             const files = fs.readdirSync(templatesDir)
               .filter(f => f.toLowerCase().endsWith('.csv'))
@@ -100,12 +95,10 @@ export default defineConfig({
                   url: `./templates/${encodeURIComponent(f)}`
                 };
               });
-            const manifestStr = JSON.stringify(files, null, 2);
-            fs.writeFileSync(path.resolve(distTemplatesDir, 'manifest.json'), manifestStr);
-            fs.writeFileSync(path.resolve(publicTemplatesDir, 'manifest.json'), manifestStr);
+            fs.writeFileSync(path.resolve(distTemplatesDir, 'manifest.json'), JSON.stringify(files, null, 2));
           }
         } catch (e) {
-          console.warn("Could not copy templates to dist/public:", e);
+          console.warn("Could not copy templates to dist:", e);
         }
       }
     }

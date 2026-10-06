@@ -1,53 +1,61 @@
 # Beamline Layout Builder Architecture
 
-This document describes the modular architecture of the Beamline Layout Builder application after the refactoring.
-
-## Overview
-
-The project is built with **React** and **Vite**, utilizing a modular structure to separate concerns, improve maintainability, and allow for easier scaling of new features.
+The app is built with **React** and **Vite**. Pure logic (geometry, ray tracing, CSV) lives in plain functions under `src/utils/` so it can be unit-tested; React state lives in hooks under `src/hooks/`; UI lives in `src/components/`.
 
 ## Directory Structure
 
 ```text
-├── app.jsx                 # Root component, orchestrates high-level layout
+├── app.jsx                       # Root component: toolbar, layout, error boundaries
+├── templates/                    # CSV beamline templates (the only copy; copied into dist/ at build)
 ├── src/
-│   ├── components/         # Pure UI and functional components
-│   ├── hooks/              # Custom React hooks for state and logic
-│   ├── utils/              # Helper functions and mapping logic
-│   └── constants/          # Configuration, types, and defaults
-├── templates.json          # Preset beamline layouts
-└── layout.json             # Documentation and schema examples
+│   ├── constants/index.js        # Component TYPES, type-group helpers, canvas scale constants
+│   ├── constants/templates.js    # Bundled fallback template (used offline / if templates/ is missing)
+│   ├── hooks/
+│   │   ├── useBeamlineState.js   # Owns editor state and wires the hooks below together
+│   │   ├── usePhysicsEngine.js   # Memoised wrapper around utils/physics.js
+│   │   ├── useTheme.js
+│   │   └── beamline/
+│   │       ├── useCamera.js            # Zoom, pan, fit-to-screen, zoom-to-item, refit on resize
+│   │       ├── usePointerHandlers.js   # Placing, dragging (single and group), resizing, labels, panning
+│   │       ├── useItemEditing.js       # Property edits from the Properties panel; delete
+│   │       ├── useTemplates.js         # Template list, template loading, CSV import
+│   │       ├── useHistory.js           # Undo / redo
+│   │       └── useKeyboardShortcuts.js # Keyboard shortcuts (listed in components/ShortcutHelp.jsx)
+│   ├── components/
+│   │   ├── Viewport.jsx          # TOP / SIDE canvas: grid, rulers, rays, components, labels
+│   │   ├── OpticalComponent.jsx  # Drawing of each component type (memoised)
+│   │   ├── PropertiesWidget.jsx  # Right-hand panel; sections live in properties/
+│   │   ├── properties/           # Anchor, enclosure, optic, footprint, source-ray sections
+│   │   ├── TableView.jsx         # Construction schedule & clearance table
+│   │   ├── Sidebar.jsx, SettingsModal.jsx, CadSvgExportModal.jsx
+│   │   ├── ErrorBoundary.jsx     # Keeps one crashing panel from taking down the app
+│   │   └── ShortcutHelp.jsx      # Keyboard shortcuts dialog
+│   └── utils/
+│       ├── geometry.js           # Item lengths and start/end bounds; bound edits with lock constraints
+│       ├── physics.js            # Ray tracing through mirrors, DCMs, gratings, splitters
+│       ├── schedule.js           # Construction schedule, clearances, overlap detection
+│       ├── csv.js                # CSV export / import
+│       ├── cadSvg.js             # CAD SVG export
+│       ├── miscParams.js         # The four type-specific "Misc" CSV columns
+│       ├── itemFactory.js        # New items from the palette; upgrades for old saved data
+│       ├── autosave.js           # Browser-storage autosave
+│       ├── constructionUtils.js  # Re-exports the modules above (kept for existing imports)
+│       └── index.js              # Visual heights, default colours, numOr()
 ```
 
-## Core Modules
+## Key ideas
 
-### 1. State Management (`src/hooks/useBeamlineState.js`)
-Handles the complex interactions of the canvas, including:
-- Component placement, selection, and deletion.
-- Drag-and-drop mechanics (components, labels, and resizing).
-- Canvas panning, zooming, and grid snapping.
-- JSON Port import/export logic.
+### Items and computed items
+`useBeamlineState` holds `items`: what the user placed and edited. `computeBeamPaths(items)` returns `computedItems`, copies with the ray-traced positions (`y`, `z`), slopes and mirror angles, plus the trace points used to draw the rays. Components draw from `computedItems`, but **edits must go to `items`** (use `setItems(prev => …)` and look the item up in `prev`), otherwise computed fields leak into the saved layout.
 
-### 2. Physics Engine (`src/hooks/usePhysicsEngine.js`)
-Calculates the beam path based on optical component properties:
-- **DCM (Monochromator):** Computes beam shift and crystal positioning based on Bragg angle and offset.
-- **Mirrors & Gratings:** Calculates beam deflection and rotation.
-- **Trace Points:** Generates a sequence of points used to render the ray-tracing path in both TOP and SIDE views.
+### Coordinates
+Canvas X is `ORIGIN_X + distance_m * PX_PER_M`. Canvas Y/Z is measured from the beam axis at `BEAM_AXIS_PX` (`PX_PER_MM_V` px per mm); the SIDE-view floor is at `FLOOR_PX`. Use the constants rather than the raw numbers 160 / 150 / 200.
 
-### 3. UI Components (`src/components/`)
-- **Viewport:** Renders the canvas, grid, rulers, and optical elements.
-- **Sidebar:** Provides the tool palette for adding components and controlling the canvas.
-- **PropertiesWidget:** A floating, draggable panel for fine-tuning selected component properties.
-- **OpticalComponent:** Encapsulates the visual rendering of different beamline elements (SVG/CSS).
+### Component types
+Use the helpers in `src/constants/index.js` (`isRangeType`, `isAnchorType`, `isDcmType`, `canEditElevation`, …) instead of writing type lists inline. Adding a type: add it to `TYPES`, to the relevant helper groups, and draw it in `OpticalComponent.jsx`.
 
-### 4. Utilities & Constants (`src/utils/`, `src/constants/`)
-- **Mapping:** Transforms raw template data into interactive canvas items.
-- **Defaults:** Defines physical lengths, colors, and dimensions for every component type.
-- **Theming:** Centralized theme configuration for light and dark modes.
+### Undo and autosave
+`useHistory` watches `items` and records a step once changes have been quiet for a moment, or when a drag ends, so callers just use `setItems` as normal. Autosave writes the layout to `localStorage` shortly after each change; on startup the autosaved layout is restored, otherwise the preferred template is loaded (falling back to the bundled template if no template can be fetched).
 
-## Scalability
-
-This architecture allows for:
-- **Adding new components:** Simply define a new type in `constants/index.js` and add its visual representation in `OpticalComponent.jsx`.
-- **Advanced Physics:** New ray-tracing logic can be added to the `usePhysicsEngine` without affecting UI code.
-- **Alternative UIs:** The logic in hooks is decoupled from the layout, enabling different view configurations.
+## Testing
+`npm test` runs Vitest. Tests live next to the code in `__tests__/` folders and cover CSV round-trips for every template, geometry, ray tracing, item creation, autosave and undo/redo. `npm run lint` runs ESLint; `no-undef` is an error because undefined names crash the app at runtime.
