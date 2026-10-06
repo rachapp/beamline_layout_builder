@@ -133,7 +133,11 @@ export const useBeamlineState = () => {
     if (fileName !== null) templatesApi.setLoadedFileName(fileName);
     setItems(newItems);
     selection.select(null);
-    setTimeout(() => camera.handleFitToScreen(newItems), 60);
+    // Fit in the same render that shows the new items, so the layout never appears at the previous
+    // zoom first. If the viewports have no size yet, try again once they have been laid out.
+    if (!camera.handleFitToScreen(newItems, { instant: true })) {
+      setTimeout(() => camera.handleFitToScreen(newItems, { instant: true }), 60);
+    }
   };
   const templatesApi = useTemplates({ applyLayout });
 
@@ -207,7 +211,7 @@ export const useBeamlineState = () => {
     selectAll: () => selection.selectMany(items.map(i => i.id)),
     draggingInfo: pointer.draggingInfo, setDraggingInfo: pointer.setDraggingInfo,
     editingLabel, setEditingLabel, placingType, setPlacingType, ghostPos, setGhostPos, ghostBranch, setGhostBranch,
-    zoom: camera.zoom, setZoom: camera.setZoom, pan: camera.pan, setPan: camera.setPan,
+    zoom: camera.zoom, setZoom: camera.setZoom, pan: camera.pan, setPan: camera.setPan, cameraJumpId: camera.cameraJumpId,
     showGrid, setShowGrid, snapToGrid, setSnapToGrid, showRuler, setShowRuler,
     showAnnotations, setShowAnnotations,
     canvasLength, setCanvasLength, showUI, setShowUI,

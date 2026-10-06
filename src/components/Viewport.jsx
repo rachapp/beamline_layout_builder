@@ -7,7 +7,7 @@ import { getItemVisualHeight, numOr } from '../utils';
 
 export const Viewport = ({ 
   viewType, title, refObj, scrollRef, planeCoord, tracePoints, tracePointsBranch = [], theme, 
-  draggingInfo, placingType, pan, zoom, showGrid, showRuler, showAnnotations = true, canvasWidth, 
+  draggingInfo, placingType, pan, zoom, cameraJumpId = 0, showGrid, showRuler, showAnnotations = true, canvasWidth, 
   isDarkMode, computedItems, selectedIds = [], setSelectedId, editingLabel, rayColor, 
   rayWidth, rayStyle, showArrow, sourceItem, handleBgPointerDown, 
   handlePointerMove, handlePointerUp, handleWheel, handlePointerDown, 
@@ -149,8 +149,18 @@ export const Viewport = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const prevTransformRef = useRef({ x: pan[viewType]?.x, y: pan[viewType]?.y, zoom });
   const transitionTimerRef = useRef(null);
+  // A new cameraJumpId means this camera change must not animate (e.g. fitting a newly loaded layout).
+  const lastJumpIdRef = useRef(cameraJumpId);
+  const isCameraJump = cameraJumpId !== lastJumpIdRef.current;
 
   useEffect(() => {
+    if (cameraJumpId !== lastJumpIdRef.current) {
+      lastJumpIdRef.current = cameraJumpId;
+      prevTransformRef.current = { x: pan[viewType]?.x, y: pan[viewType]?.y, zoom };
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      setIsTransitioning(false);
+      return;
+    }
     const prev = prevTransformRef.current;
     const curX = pan[viewType]?.x;
     const curY = pan[viewType]?.y;
@@ -166,7 +176,7 @@ export const Viewport = ({
         setIsTransitioning(false);
       }, 200);
     }
-  }, [pan, zoom, viewType, isPanning, draggingInfo]);
+  }, [pan, zoom, viewType, isPanning, draggingInfo, cameraJumpId]);
 
   useEffect(() => {
     return () => {
@@ -361,7 +371,7 @@ export const Viewport = ({
           style={{
             transform: `translate(${Math.round(pan[viewType].x)}px, ${Math.round(pan[viewType].y)}px) scale(${zoom})`,
             transformOrigin: '0 0',
-            transition: isTransitioning && !isPanning && !isWheelingRef.current && !draggingInfo
+            transition: isTransitioning && !isCameraJump && !isPanning && !isWheelingRef.current && !draggingInfo
               ? 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
               : 'none'
           }}

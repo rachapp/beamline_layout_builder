@@ -9,6 +9,9 @@ import { getItemBoundsM } from '../../utils/constructionUtils';
  */
 export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placingType, refitKey }) => {
   const [zoom, setZoom] = useState(1);
+  // Bumped for camera changes that should apply instantly instead of animating (e.g. fitting a
+  // newly loaded layout), so the diagram never appears at the wrong zoom and then shrinks into place.
+  const [cameraJumpId, setCameraJumpId] = useState(0);
   const [pan, setPan] = useState({
     TOP: { x: 50, y: 100 },
     SIDE: { x: 50, y: 100 }
@@ -36,7 +39,7 @@ export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placing
     return { topContainer, sideContainer, primaryContainer };
   };
 
-  const handleFitToScreen = (customItems = null) => {
+  const handleFitToScreen = (customItems = null, { instant = false } = {}) => {
     // When used directly as onClick={handleFitToScreen}, customItems is a click event, not an array.
     const targetItems = Array.isArray(customItems) ? customItems : (itemsRef.current || []);
     const { topContainer, sideContainer, primaryContainer } = getContainers();
@@ -102,6 +105,7 @@ export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placing
     newZoom = parseFloat(newZoom.toFixed(3));
 
     setZoom(newZoom);
+    if (instant) setCameraJumpId(id => id + 1);
 
     const targetPanX = Math.round(containerW / 2 - ((minX + maxX) / 2) * newZoom);
 
@@ -236,7 +240,7 @@ export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placing
   // Auto fit-to-screen on first load: try before paint, then retry until the layout has a size.
   const hasAutoFittedRef = useRef(false);
   useLayoutEffect(() => {
-    if (!hasAutoFittedRef.current && handleFitToScreen()) hasAutoFittedRef.current = true;
+    if (!hasAutoFittedRef.current && handleFitToScreen(null, { instant: true })) hasAutoFittedRef.current = true;
   }, []);
 
   useEffect(() => {
@@ -246,7 +250,7 @@ export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placing
     let rafId = null;
     const tryAutoFit = () => {
       if (cancelled || hasAutoFittedRef.current) return;
-      if (handleFitToScreen()) {
+      if (handleFitToScreen(null, { instant: true })) {
         hasAutoFittedRef.current = true;
       } else if (attempts < 15) {
         attempts++;
@@ -339,7 +343,7 @@ export const useCamera = ({ itemsRef, computedItemsRef, editingLabelRef, placing
   };
 
   return {
-    zoom, setZoom, pan, setPan,
+    zoom, setZoom, pan, setPan, cameraJumpId,
     activeView, setActiveView: handleSetActiveView,
     sideViewRef, topViewRef, sideScrollRef, topScrollRef,
     handleFitToScreen, focusItem, scheduleFocus, cancelFocusItem, handleWheel, markViewMoved

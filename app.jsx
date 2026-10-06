@@ -52,6 +52,7 @@ function BeamlineLayoutApp() {
     placingType: state.placingType,
     pan: state.pan,
     zoom: state.zoom,
+    cameraJumpId: state.cameraJumpId,
     showGrid: state.showGrid,
     showRuler: state.showRuler,
     showAnnotations: state.showAnnotations,
